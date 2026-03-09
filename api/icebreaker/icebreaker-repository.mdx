@@ -1,0 +1,154 @@
+---
+title: IcebreakerRepository
+description: Repository interface for generating and managing icebreakers
+---
+
+## Overview
+
+The `IcebreakerRepository` interface provides methods for generating AI-powered icebreakers and submitting user feedback. This is the core repository interface for the icebreaker feature in the DadoMatch Shared SDK.
+
+**Package:** `com.dadomatch.shared.feature.icebreaker.domain.repository`
+
+## Interface Definition
+
+```kotlin
+interface IcebreakerRepository {
+    suspend fun generateIcebreaker(
+        environment: String,
+        intensity: String,
+        language: String
+    ): Resource<String>
+    
+    suspend fun submitFeedback(
+        icebreaker: String,
+        feedback: IcebreakerFeedback
+    )
+}
+```
+
+## Methods
+
+### generateIcebreaker
+
+<ParamField path="environment" type="String" required>
+  The social environment context for the icebreaker (e.g., "party", "coffee shop", "gym")
+</ParamField>
+
+<ParamField path="intensity" type="String" required>
+  The intensity level of the icebreaker (e.g., "low", "medium", "high")
+</ParamField>
+
+<ParamField path="language" type="String" required>
+  The language code for the generated icebreaker (e.g., "en", "es", "fr")
+</ParamField>
+
+<ResponseField name="return" type="Resource<String>">
+  A `Resource` wrapper containing:
+  - `Success<String>`: The generated icebreaker text
+  - `Error`: An error message if generation failed
+  - `Loading`: Indicates the operation is in progress
+</ResponseField>
+
+Generates an AI-powered icebreaker based on the specified environment, intensity, and language parameters.
+
+**Signature:**
+```kotlin
+suspend fun generateIcebreaker(
+    environment: String,
+    intensity: String,
+    language: String
+): Resource<String>
+```
+
+**Example:**
+```kotlin
+val repository: IcebreakerRepository = IcebreakerRepositoryImpl(geminiService)
+
+val result = repository.generateIcebreaker(
+    environment = "coffee shop",
+    intensity = "medium",
+    language = "en"
+)
+
+when (result) {
+    is Resource.Success -> println("Icebreaker: ${result.data}")
+    is Resource.Error -> println("Error: ${result.message}")
+    is Resource.Loading -> println("Generating...")
+}
+```
+
+### submitFeedback
+
+<ParamField path="icebreaker" type="String" required>
+  The icebreaker text that the user is providing feedback on
+</ParamField>
+
+<ParamField path="feedback" type="IcebreakerFeedback" required>
+  The feedback type. Possible values:
+  - `GOOD`: User liked the icebreaker
+  - `BAD`: User disliked the icebreaker
+  - `USED`: User used the icebreaker
+  - `IGNORED`: User ignored the icebreaker
+</ParamField>
+
+Submits user feedback for a generated icebreaker. This helps improve future icebreaker generation.
+
+**Signature:**
+```kotlin
+suspend fun submitFeedback(
+    icebreaker: String,
+    feedback: IcebreakerFeedback
+)
+```
+
+**Example:**
+```kotlin
+repository.submitFeedback(
+    icebreaker = "What's the most interesting thing you've done this week?",
+    feedback = IcebreakerFeedback.USED
+)
+```
+
+## Implementation
+
+The default implementation is `IcebreakerRepositoryImpl`, which uses the Gemini AI service to generate icebreakers.
+
+**Source:** `com.dadomatch.shared.feature.icebreaker.data.repository.IcebreakerRepositoryImpl`
+
+```kotlin
+class IcebreakerRepositoryImpl(
+    private val geminiService: GeminiService
+) : IcebreakerRepository
+```
+
+## Related Types
+
+### Resource
+
+A sealed class representing the state of an asynchronous operation:
+
+```kotlin
+sealed class Resource<out T> {
+    data class Success<out T>(val data: T) : Resource<T>()
+    data class Error(val message: String, val throwable: Throwable? = null) : Resource<Nothing>()
+    object Loading : Resource<Nothing>()
+}
+```
+
+### IcebreakerFeedback
+
+An enum representing user feedback types:
+
+```kotlin
+enum class IcebreakerFeedback {
+    GOOD,     // User liked the icebreaker
+    BAD,      // User disliked the icebreaker
+    USED,     // User used the icebreaker
+    IGNORED   // User ignored the icebreaker
+}
+```
+
+## See Also
+
+- [GenerateIcebreakerUseCase](/api/icebreaker/generate-usecase) - Use case for generating icebreakers
+- [RollDiceUseCase](/api/icebreaker/roll-dice-usecase) - Use case for handling dice rolls with subscription checks

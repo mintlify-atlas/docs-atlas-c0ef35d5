@@ -1,0 +1,272 @@
+---
+title: Changelog
+description: Version history and release notes for DadoMatch Shared SDK
+---
+
+All notable changes to the DadoMatch Shared SDK are documented here. The project follows [Semantic Versioning](https://semver.org/).
+
+## Version Format
+
+Versions follow the format `MAJOR.MINOR.PATCH`:
+
+- **MAJOR**: Incompatible API changes
+- **MINOR**: Backwards-compatible functionality additions
+- **PATCH**: Backwards-compatible bug fixes
+
+## Latest Release
+
+### [1.0.1] - Current
+
+<Note>
+  This is the current stable version. See the [GitHub Releases](https://github.com/felipechaux/dado-match-shared/releases/tag/v1.0.1) page for downloads.
+</Note>
+
+#### Changes
+
+- Patch release with minor fixes and improvements
+- Enhanced stability for production use
+- Updated dependencies for security patches
+
+#### Technical Details
+
+| Field | Value |
+|-------|-------|
+| **Version** | `1.0.1` |
+| **Platforms** | iOS 16.0+, Android API 24+ |
+| **Package** | `DadoMatchShared.xcframework.zip` |
+| **Min Kotlin** | 2.0.20 |
+| **Min Java** | JDK 17 |
+
+---
+
+## Previous Releases
+
+### [1.0.0] - Initial Release
+
+<Accordion title="View 1.0.0 release notes">
+
+#### Features
+
+**Core Architecture**
+- ✅ Kotlin Multiplatform shared module
+- ✅ Compose Multiplatform UI components
+- ✅ Dependency injection with Koin
+- ✅ Clean architecture pattern (domain, data, presentation layers)
+
+**Authentication**
+- ✅ Firebase Authentication integration
+- ✅ Google Sign-In support (Android & iOS)
+- ✅ Apple Sign-In support (iOS)
+- ✅ Native authentication handler interface
+- ✅ Anonymous authentication support
+
+**Subscription Management**
+- ✅ RevenueCat KMP SDK integration
+- ✅ In-app purchase handling
+- ✅ Subscription status tracking
+- ✅ Purchase restoration
+- ✅ Entitlement management
+- ✅ Customer info reactive flow
+
+**AI Features**
+- ✅ Gemini API integration for icebreaker generation
+- ✅ Customizable environment and intensity settings
+- ✅ Multi-language support
+- ✅ Feedback system for AI responses
+
+**Data Persistence**
+- ✅ Room database for local storage
+- ✅ DataStore for preferences
+- ✅ Success tracking and history
+- ✅ Onboarding state management
+
+**UI Components**
+- ✅ Shared navigation system
+- ✅ Liquid footer menu with animations
+- ✅ Confetti effects
+- ✅ Empty state components
+- ✅ Custom theme with neon colors
+- ✅ Responsive layouts for iOS and Android
+
+**Platform Support**
+- ✅ iOS 16.0+ (arm64, x86_64, simulator)
+- ✅ Android API 24+ (minSdk 24, compileSdk 35)
+- ✅ XCFramework for Swift Package Manager
+- ✅ Gradle composite builds for Android
+
+**Build & CI/CD**
+- ✅ Automated GitHub Actions release workflow
+- ✅ XCFramework build automation
+- ✅ Package.swift auto-generation with checksums
+- ✅ Version tracking via VERSION file
+- ✅ Tag-based release system
+
+#### Dependencies
+
+**Core**
+- Kotlin 2.0.20
+- Compose Multiplatform 1.7.0
+- Ktor for networking
+- Koin 4.0+ for DI
+
+**Platform-Specific**
+- RevenueCat KMP SDK
+- Firebase KMP (Auth, Common)
+- Room KMP for database
+- DataStore KMP for preferences
+
+**UI & Resources**
+- Material 3 Design
+- Material Icons
+- Moko Resources
+- Coil for image loading
+- Compottie for animations
+
+#### Breaking Changes
+
+*Initial release - no breaking changes*
+
+#### Migration Guide
+
+*Not applicable for initial release*
+
+</Accordion>
+
+---
+
+## Upcoming Features
+
+<Note>
+  Planned features for future releases. Subject to change.
+</Note>
+
+### Roadmap
+
+**Version 1.1.0 (Planned)**
+- Enhanced offline support
+- Additional UI components
+- Performance optimizations
+- Extended localization support
+
+**Version 1.2.0 (Planned)**
+- Advanced analytics integration
+- Push notification support
+- Deep linking capabilities
+
+**Version 2.0.0 (Future)**
+- API redesign for improved ergonomics
+- Additional platform support
+- Breaking changes for better architecture
+
+---
+
+## Release Process
+
+Releases are fully automated via GitHub Actions:
+
+### Creating a Release
+
+```bash
+# Ensure main branch is up to date
+git checkout main && git pull
+
+# Create and push version tag
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+### Automated Steps
+
+The CI/CD workflow automatically:
+
+1. 🏗️ Builds the Release XCFramework
+2. 📦 Creates zip archive with framework
+3. 🔐 Calculates SHA256 checksum for SPM
+4. 🎉 Creates GitHub Release with artifacts
+5. 📝 Updates `Package.swift` with download URL and checksum
+6. 🔄 Updates `VERSION` file
+7. 💾 Commits changes back to main branch
+
+<Warning>
+  Only tags pushed from the `main` branch will trigger releases. Tags from other branches are rejected.
+</Warning>
+
+---
+
+## Version History Summary
+
+| Version | Release Date | Type | Key Changes |
+|---------|-------------|------|-------------|
+| **1.0.1** | Current | Patch | Stability improvements, dependency updates |
+| **1.0.0** | Initial | Major | Initial release with core features |
+
+---
+
+## Deprecation Policy
+
+<Accordion title="Understanding deprecation notices">
+
+### Deprecation Timeline
+
+1. **Announcement**: Feature marked as `@Deprecated` with replacement suggestion
+2. **Grace Period**: Minimum 2 minor versions before removal
+3. **Warning**: Additional warnings added in next major version
+4. **Removal**: Deprecated feature removed in next breaking version
+
+### Example
+
+```kotlin
+// Version 1.2.0 - Deprecation announced
+@Deprecated(
+    message = "Use newMethod() instead",
+    replaceWith = ReplaceWith("newMethod()"),
+    level = DeprecationLevel.WARNING
+)
+fun oldMethod() { }
+
+// Version 1.3.0 - Still available with warning
+// Version 1.4.0 - Still available with warning
+
+// Version 2.0.0 - Removed
+```
+
+</Accordion>
+
+---
+
+## Migration Guides
+
+<CardGroup cols={2}>
+  <Card title="Platform Integration" icon="mobile" href="/quickstart/installation">
+    Integration guides for iOS and Android
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/core/koin-initializer">
+    Complete API documentation
+  </Card>
+</CardGroup>
+
+---
+
+## Download Previous Versions
+
+All releases are available on GitHub:
+
+- [v1.0.1 Release](https://github.com/felipechaux/dado-match-shared/releases/tag/v1.0.1) (Current)
+- [v1.0.0 Release](https://github.com/felipechaux/dado-match-shared/releases/tag/v1.0.0) (Initial)
+- [All Releases](https://github.com/felipechaux/dado-match-shared/releases)
+
+<Note>
+  Each release includes:
+  - `DadoMatchShared.xcframework.zip` - Binary framework
+  - Release notes with detailed changes
+  - SHA256 checksum for verification
+  - Updated `Package.swift` for SPM integration
+</Note>
+
+---
+
+## Stay Updated
+
+- 📢 Watch the [GitHub repository](https://github.com/felipechaux/dado-match-shared) for release notifications
+- 🏷️ Subscribe to [release RSS feed](https://github.com/felipechaux/dado-match-shared/releases.atom)
+- 📝 Check this changelog regularly for updates

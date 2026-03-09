@@ -1,0 +1,102 @@
+---
+title: 'SuccessRepository'
+description: 'Repository interface for managing user success records and achievements'
+---
+
+## Overview
+
+The `SuccessRepository` interface provides a simple API for tracking and retrieving user success records, such as matches, dates, or other achievements within the DadoMatch app.
+
+**Package:** `com.dadomatch.shared.feature.success.domain.repository`
+
+## Methods
+
+### addSuccess
+
+<ParamField path="addSuccess" type="suspend (record: SuccessRecord) -> Unit">
+  Add a new success record for the user. This could represent a successful match, completed date, or other achievement.
+</ParamField>
+
+**Parameters:**
+- `record` (SuccessRecord) - The success record to add
+
+**Example:**
+```kotlin
+val successRecord = SuccessRecord(
+    id = UUID.randomUUID().toString(),
+    type = SuccessType.MATCH,
+    timestamp = Clock.System.now(),
+    description = "Matched with Sarah"
+)
+
+successRepository.addSuccess(successRecord)
+```
+
+---
+
+### getSuccesses
+
+<ParamField path="getSuccesses" type="() -> Flow<List<SuccessRecord>>">
+  Get all success records as a Flow for reactive updates. This allows observers to receive real-time updates when new success records are added.
+</ParamField>
+
+**Returns:** `Flow<List<SuccessRecord>>` - A Flow that emits the list of success records, ordered by most recent first
+
+**Example:**
+```kotlin
+successRepository.getSuccesses()
+    .collect { successList ->
+        // Display success records in UI
+        successList.forEach { record ->
+            println("Success: ${record.description}")
+        }
+    }
+```
+
+## Usage Pattern
+
+The typical usage pattern for this repository:
+
+```kotlin
+// Observe success records in UI
+val successRecords by successRepository.getSuccesses()
+    .collectAsState(initial = emptyList())
+
+// Add a success when an event occurs
+viewModelScope.launch {
+    successRepository.addSuccess(
+        SuccessRecord(
+            id = generateId(),
+            type = SuccessType.DATE_COMPLETED,
+            timestamp = Clock.System.now(),
+            description = "First date with Alex"
+        )
+    )
+}
+```
+
+## Related Types
+
+### SuccessRecord
+
+The `SuccessRecord` data class represents a single success achievement. While the exact structure may vary, it typically includes:
+
+- `id` - Unique identifier for the record
+- `type` - Type of success (match, date, etc.)
+- `timestamp` - When the success occurred
+- `description` - Human-readable description of the success
+- Additional metadata depending on the success type
+
+## Implementation Notes
+
+- The actual implementation typically uses local database storage (e.g., Room, SQLDelight) to persist success records
+- The Flow-based API ensures that any UI observing the success list will automatically update when new records are added
+- Success records are generally immutable once created, though the repository could be extended to support editing or deletion
+- Consider implementing pagination if the number of success records grows large
+
+## Use Cases
+
+- Displaying a "Success Story" timeline in the app
+- Tracking user engagement metrics
+- Celebrating user achievements with notifications
+- Generating analytics reports

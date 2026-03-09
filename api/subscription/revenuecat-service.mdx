@@ -1,0 +1,237 @@
+---
+title: 'RevenueCatService'
+description: 'Service wrapper around RevenueCat KMP SDK for subscription operations'
+---
+
+## Overview
+
+The `RevenueCatService` class provides a clean interface for subscription operations using the RevenueCat KMP SDK. It handles configuration, purchasing, restoring purchases, and managing customer information with reactive state management.
+
+**Package:** `com.dadomatch.shared.feature.subscription.data.remote`
+
+<Note>
+  This service uses a manual StateFlow to ensure UI reactivity across the app when subscription status changes.
+</Note>
+
+## Properties
+
+### customerInfoFlow
+
+<ParamField path="customerInfoFlow" type="Flow<CustomerInfo?>">
+  A Flow that emits customer information updates. Subscribe to this flow to receive real-time updates when customer information changes (e.g., after purchases, restores, or login).
+</ParamField>
+
+**Example:**
+```kotlin
+revenueCatService.customerInfoFlow
+    .collect { customerInfo ->
+        // Handle customer info updates
+    }
+```
+
+## Methods
+
+### configure
+
+<ParamField path="configure" type="(apiKey: String, userId: String?) -> Unit">
+  Configure the RevenueCat SDK. This should be called once at app startup before any other operations.
+</ParamField>
+
+**Parameters:**
+- `apiKey` (String) - Your RevenueCat API key
+- `userId` (String?, optional) - Optional user identifier to link with RevenueCat
+
+**Example:**
+```kotlin
+revenueCatService.configure(
+    apiKey = "your_api_key",
+    userId = firebaseUserId
+)
+```
+
+---
+
+### getCustomerInfo
+
+<ParamField path="getCustomerInfo" type="suspend () -> Result<CustomerInfo>">
+  Get current customer information including subscription status and entitlements.
+</ParamField>
+
+**Returns:** `Result<CustomerInfo>` - Result containing customer information
+
+**Side Effects:** Updates `customerInfoFlow` with the latest customer info
+
+**Example:**
+```kotlin
+val result = revenueCatService.getCustomerInfo()
+result.onSuccess { customerInfo ->
+    // Access customer subscription data
+}.onFailure { error ->
+    // Handle error
+}
+```
+
+---
+
+### getOfferings
+
+<ParamField path="getOfferings" type="suspend () -> Result<Offerings>">
+  Get available subscription offerings and products configured in RevenueCat dashboard.
+</ParamField>
+
+**Returns:** `Result<Offerings>` - Result containing available offerings
+
+**Example:**
+```kotlin
+val result = revenueCatService.getOfferings()
+result.onSuccess { offerings ->
+    val currentOffering = offerings.current
+    currentOffering?.availablePackages?.forEach { package ->
+        // Display package information
+    }
+}
+```
+
+---
+
+### purchase
+
+<ParamField path="purchase" type="suspend (storeProduct: StoreProduct) -> Result<CustomerInfo>">
+  Purchase a subscription product.
+</ParamField>
+
+**Parameters:**
+- `storeProduct` (StoreProduct) - The store product to purchase (obtained from offerings)
+
+**Returns:** `Result<CustomerInfo>` - Result containing updated customer info after purchase
+
+**Side Effects:** Updates `customerInfoFlow` with the latest customer info
+
+**Example:**
+```kotlin
+val result = revenueCatService.purchase(storeProduct)
+result.onSuccess { customerInfo ->
+    // Purchase successful
+}.onFailure { error ->
+    // Handle purchase error (user cancelled, payment failed, etc.)
+}
+```
+
+---
+
+### restorePurchases
+
+<ParamField path="restorePurchases" type="suspend () -> Result<CustomerInfo>">
+  Restore previous purchases from the app store. This is useful when users reinstall the app or switch devices.
+</ParamField>
+
+**Returns:** `Result<CustomerInfo>` - Result containing updated customer info after restoration
+
+**Side Effects:** Updates `customerInfoFlow` with the latest customer info
+
+**Example:**
+```kotlin
+val result = revenueCatService.restorePurchases()
+result.onSuccess { customerInfo ->
+    // Purchases restored successfully
+}
+```
+
+---
+
+### hasEntitlement
+
+<ParamField path="hasEntitlement" type="(customerInfo: CustomerInfo?, entitlementId: String) -> Boolean">
+  Check if user has a specific entitlement.
+</ParamField>
+
+**Parameters:**
+- `customerInfo` (CustomerInfo?) - The customer information to check (can be null)
+- `entitlementId` (String) - The entitlement identifier to check
+
+**Returns:** `Boolean` - `true` if user has the entitlement, `false` otherwise
+
+**Example:**
+```kotlin
+val hasPro = revenueCatService.hasEntitlement(
+    customerInfo = customerInfo,
+    entitlementId = "pro"
+)
+```
+
+---
+
+### logIn
+
+<ParamField path="logIn" type="suspend (userId: String) -> Result<CustomerInfo>">
+  Link current user with an identifier (e.g., Firebase UID). If RevenueCat creates a new user for this ID, it automatically restores purchases so any subscription made while anonymous is properly carried over.
+</ParamField>
+
+**Parameters:**
+- `userId` (String) - The user identifier to link with RevenueCat
+
+**Returns:** `Result<CustomerInfo>` - Result containing customer info after login
+
+**Side Effects:** 
+- Updates `customerInfoFlow` with the latest customer info
+- Automatically restores purchases if a new RevenueCat user is created
+
+**Example:**
+```kotlin
+val result = revenueCatService.logIn(firebaseUserId)
+result.onSuccess { customerInfo ->
+    // User logged in and linked
+}
+```
+
+---
+
+### logOut
+
+<ParamField path="logOut" type="suspend () -> Result<CustomerInfo>">
+  Unlink user from RevenueCat. This creates a new anonymous RevenueCat user.
+</ParamField>
+
+**Returns:** `Result<CustomerInfo>` - Result containing customer info after logout
+
+**Side Effects:** Updates `customerInfoFlow` with the latest customer info
+
+**Example:**
+```kotlin
+val result = revenueCatService.logOut()
+result.onSuccess { customerInfo ->
+    // User logged out, now anonymous
+}
+```
+
+---
+
+### hasPremiumAccess
+
+<ParamField path="hasPremiumAccess" type="(customerInfo: CustomerInfo?) -> Boolean">
+  Convenience method to check if user has premium access by checking for the PRO entitlement.
+</ParamField>
+
+**Parameters:**
+- `customerInfo` (CustomerInfo?) - The customer information to check (can be null)
+
+**Returns:** `Boolean` - `true` if user has premium access, `false` otherwise
+
+**Example:**
+```kotlin
+if (revenueCatService.hasPremiumAccess(customerInfo)) {
+    // Show premium features
+}
+```
+
+## Related Types
+
+- `CustomerInfo` - RevenueCat customer information (from RevenueCat KMP SDK)
+- `Offerings` - Available subscription offerings (from RevenueCat KMP SDK)
+- `StoreProduct` - Store product for purchase (from RevenueCat KMP SDK)
+- `Entitlement` - DadoMatch entitlement enum
+
+## See Also
+
+- [SubscriptionRepository](/api/subscription/subscription-repository) - Higher-level subscription repository interface
+- [RevenueCat KMP Documentation](https://www.revenuecat.com/docs/kotlin-multiplatform)

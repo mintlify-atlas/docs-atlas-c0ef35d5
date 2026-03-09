@@ -1,0 +1,171 @@
+---
+title: AuthRepository
+description: Interface for authentication operations in DadoMatch Shared SDK
+---
+
+## Overview
+
+`AuthRepository` is the core interface for managing user authentication in the DadoMatch Shared SDK. It provides methods for signing in with Google, Apple, or anonymously, and exposes a Flow of the current user state.
+
+**Location:** `com.dadomatch.shared.feature.auth.domain.repository.AuthRepository`
+
+**Implementation:** `AuthRepositoryImpl`
+
+## Properties
+
+<ParamField path="currentUser" type="Flow<AuthUser?>">
+  A Kotlin Flow that emits the current authenticated user. Emits `null` when no user is signed in.
+  
+  Subscribe to this Flow to observe authentication state changes in real-time.
+</ParamField>
+
+## Methods
+
+### signInWithGoogle
+
+<ParamField path="signInWithGoogle" type="suspend fun">
+  Signs in a user using Google authentication credentials.
+  
+  ```kotlin
+  suspend fun signInWithGoogle(
+      idToken: String,
+      accessToken: String? = null
+  ): Result<AuthUser>
+  ```
+  
+  **Parameters:**
+  - `idToken` (String): The Google ID token obtained from the native sign-in flow
+  - `accessToken` (String?, optional): The Google access token. Required on iOS, optional on Android
+  
+  **Returns:** `Result<AuthUser>` - Success with user data or failure with error
+  
+  **Errors:**
+  - "Firebase is not initialized" - Firebase configuration is missing
+  - "Authentication error: Check Firebase configuration (SHA-1/Web Client ID)" - Invalid Firebase setup
+  - Other authentication-related errors
+</ParamField>
+
+### signInWithApple
+
+<ParamField path="signInWithApple" type="suspend fun">
+  Signs in a user using Apple authentication credentials.
+  
+  ```kotlin
+  suspend fun signInWithApple(
+      idToken: String,
+      nonce: String? = null
+  ): Result<AuthUser>
+  ```
+  
+  **Parameters:**
+  - `idToken` (String): The Apple ID token from the native sign-in flow. Can be empty string for web flows
+  - `nonce` (String?, optional): The nonce used during authentication
+  
+  **Returns:** `Result<AuthUser>` - Success with user data or failure with error
+  
+  **Special behavior:**
+  - If `idToken` is empty, assumes web flow and returns current user
+  - Otherwise uses OAuth credential with provider "apple.com"
+</ParamField>
+
+### signInAnonymously
+
+<ParamField path="signInAnonymously" type="suspend fun">
+  Signs in a user anonymously without requiring credentials.
+  
+  ```kotlin
+  suspend fun signInAnonymously(): Result<AuthUser>
+  ```
+  
+  **Returns:** `Result<AuthUser>` - Success with anonymous user data or failure with error
+  
+  Anonymous users have limited functionality and can be converted to permanent accounts later.
+</ParamField>
+
+### signOut
+
+<ParamField path="signOut" type="suspend fun">
+  Signs out the current user.
+  
+  ```kotlin
+  suspend fun signOut()
+  ```
+  
+  After calling this method, `currentUser` Flow will emit `null`.
+</ParamField>
+
+## Data Models
+
+### AuthUser
+
+```kotlin
+data class AuthUser(
+    val id: String,
+    val email: String?,
+    val displayName: String?,
+    val isAnonymous: Boolean
+)
+```
+
+<ResponseField name="id" type="String" required>
+  Unique user identifier from Firebase Authentication
+</ResponseField>
+
+<ResponseField name="email" type="String?">
+  User's email address. May be null for anonymous users or providers that don't share email
+</ResponseField>
+
+<ResponseField name="displayName" type="String?">
+  User's display name from the authentication provider. May be null
+</ResponseField>
+
+<ResponseField name="isAnonymous" type="Boolean" required>
+  Whether the user is signed in anonymously
+</ResponseField>
+
+## Usage Example
+
+```kotlin
+class MyAuthManager(private val authRepository: AuthRepository) {
+    
+    // Observe authentication state
+    fun observeAuthState() {
+        authRepository.currentUser.collect { user ->
+            if (user != null) {
+                println("User signed in: ${user.displayName}")
+            } else {
+                println("No user signed in")
+            }
+        }
+    }
+    
+    // Sign in with Google
+    suspend fun googleSignIn(idToken: String, accessToken: String?) {
+        authRepository.signInWithGoogle(idToken, accessToken)
+            .onSuccess { user ->
+                println("Signed in: ${user.email}")
+            }
+            .onFailure { error ->
+                println("Sign in failed: ${error.message}")
+            }
+    }
+    
+    // Sign out
+    suspend fun logout() {
+        authRepository.signOut()
+    }
+}
+```
+
+## Implementation Notes
+
+- Built on top of Firebase Authentication
+- Uses `dev.gitlive.firebase` multiplatform library
+- Thread-safe with coroutines support
+- Handles Firebase initialization errors gracefully
+- Returns `Result` types for explicit error handling
+
+## Related
+
+- [AuthViewModel](/api/auth/auth-viewmodel) - Presentation layer for authentication UI
+- [NativeAuthHandler](/api/auth/native-auth-handler) - Platform-specific authentication handling

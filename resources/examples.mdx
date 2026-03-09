@@ -1,0 +1,429 @@
+---
+title: Code Examples
+description: Practical examples and usage patterns for integrating DadoMatch Shared SDK
+---
+
+This page provides real-world examples for common integration scenarios with the DadoMatch Shared SDK.
+
+## Platform Initialization
+
+<CodeGroup>
+
+```kotlin Android
+import com.dadomatch.shared.initKoinAndroid
+
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        
+        // Initialize the shared SDK
+        initKoinAndroid(this)
+    }
+}
+```
+
+```swift iOS
+import DadoMatchShared
+
+class AppDelegate: UIResponder, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    ) -> Bool {
+        // Initialize Koin dependency injection
+        KoinInitializerKt.initKoin()
+        return true
+    }
+}
+```
+
+</CodeGroup>
+
+<Note>
+  On Android, the SDK automatically initializes Firebase and database components. On iOS, ensure you call `initKoin()` before accessing any shared functionality.
+</Note>
+
+## UI Integration
+
+### Using Shared Compose UI (iOS)
+
+```swift
+import SwiftUI
+import DadoMatchShared
+
+struct ContentView: View {
+    var body: some View {
+        ComposeView()
+            .ignoresSafeArea()
+    }
+}
+
+struct ComposeView: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        MainViewControllerKt.MainViewController()
+    }
+    
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+```
+
+### Custom Navigation Integration
+
+<CodeGroup>
+
+```kotlin Kotlin
+import com.dadomatch.shared.presentation.ui.navigation.AppNavigation
+import androidx.compose.runtime.Composable
+
+@Composable
+fun MyApp() {
+    // Use the shared navigation system
+    AppNavigation()
+}
+```
+
+```kotlin Custom Navigation
+import com.dadomatch.shared.presentation.ui.components.LiquidFooterMenu
+import androidx.navigation.NavController
+
+@Composable
+fun MyCustomScreen(navController: NavController) {
+    Scaffold(
+        bottomBar = {
+            LiquidFooterMenu(
+                currentRoute = navController.currentBackStackEntry?.destination?.route,
+                onNavigate = { route -> navController.navigate(route) }
+            )
+        }
+    ) {
+        // Screen content
+    }
+}
+```
+
+</CodeGroup>
+
+## Authentication
+
+### Implementing Native Auth Handlers
+
+<CodeGroup>
+
+```kotlin Android
+import com.dadomatch.shared.feature.auth.presentation.NativeAuthHandler
+import com.dadomatch.shared.feature.auth.presentation.GoogleTokens
+import com.dadomatch.shared.feature.auth.presentation.AuthTokens
+
+class AndroidAuthHandler(
+    private val activity: FragmentActivity
+) : NativeAuthHandler {
+    
+    override suspend fun signInWithGoogle(): Result<GoogleTokens> {
+        return try {
+            // Implement Google Sign-In using Credential Manager
+            val credential = credentialManager.getCredential(
+                request = getGoogleIdOption(context),
+                context = context
+            )
+            
+            val googleIdTokenCredential = GoogleIdTokenCredential
+                .createFrom(credential.credential.data)
+            
+            Result.success(
+                GoogleTokens(
+                    idToken = googleIdTokenCredential.idToken,
+                    accessToken = null // Android doesn't require access token
+                )
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    override suspend fun signInWithApple(): Result<AuthTokens> {
+        // Apple Sign-In implementation
+        return Result.failure(Exception("Not implemented on Android"))
+    }
+}
+```
+
+```swift iOS
+import DadoMatchShared
+import AuthenticationServices
+import GoogleSignIn
+
+class IosAuthHandler: NativeAuthHandler {
+    
+    func signInWithGoogle() async -> ResultOf<GoogleTokens> {
+        do {
+            let result = try await GIDSignIn.sharedInstance.signIn(
+                withPresenting: getRootViewController()
+            )
+            
+            guard let idToken = result.user.idToken?.tokenString,
+                  let accessToken = result.user.accessToken.tokenString else {
+                return ResultOf.failure(
+                    error: KotlinThrowable(message: "Missing tokens")
+                )
+            }
+            
+            return ResultOf.success(
+                value: GoogleTokens(
+                    idToken: idToken,
+                    accessToken: accessToken
+                )
+            )
+        } catch {
+            return ResultOf.failure(error: error.asKotlinThrowable())
+        }
+    }
+    
+    func signInWithApple() async -> ResultOf<AuthTokens> {
+        // Apple Sign-In implementation
+        // ...
+    }
+}
+```
+
+</CodeGroup>
+
+<Warning>
+  Platform-specific auth handlers must be registered before using authentication features. The shared SDK provides the interface, but native implementations are required for each platform.
+</Warning>
+
+## Subscription Management
+
+### Checking Premium Status
+
+```kotlin
+import com.dadomatch.shared.feature.subscription.data.remote.RevenueCatService
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+class SubscriptionManager : KoinComponent {
+    private val revenueCatService: RevenueCatService by inject()
+    
+    suspend fun checkPremiumAccess(): Boolean {
+        return when (val result = revenueCatService.getCustomerInfo()) {
+            is Result.Success -> {
+                revenueCatService.hasPremiumAccess(result.data)
+            }
+            is Result.Failure -> false
+        }
+    }
+}
+```
+
+### Purchasing a Subscription
+
+```kotlin
+import com.dadomatch.shared.feature.subscription.domain.usecase.PurchaseSubscriptionUseCase
+import com.dadomatch.shared.feature.subscription.domain.usecase.GetAvailableProductsUseCase
+
+class MyViewModel : ViewModel() {
+    private val getProductsUseCase: GetAvailableProductsUseCase = get()
+    private val purchaseUseCase: PurchaseSubscriptionUseCase = get()
+    
+    fun purchasePremium() {
+        viewModelScope.launch {
+            // Get available products
+            val products = getProductsUseCase()
+            val premiumProduct = products.firstOrNull { it.id == "premium_monthly" }
+            
+            premiumProduct?.let { product ->
+                // Purchase the subscription
+                when (val result = purchaseUseCase(product)) {
+                    is Resource.Success -> {
+                        // Handle success
+                    }
+                    is Resource.Error -> {
+                        // Handle error
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### Observing Subscription Changes
+
+```kotlin
+import kotlinx.coroutines.flow.collectLatest
+
+class SubscriptionObserver : KoinComponent {
+    private val revenueCatService: RevenueCatService by inject()
+    
+    fun observeSubscriptionStatus() {
+        lifecycleScope.launch {
+            revenueCatService.customerInfoFlow.collectLatest { customerInfo ->
+                val isPremium = revenueCatService.hasPremiumAccess(customerInfo)
+                // Update UI based on premium status
+            }
+        }
+    }
+}
+```
+
+## Dependency Injection
+
+### Accessing Shared Services
+
+```kotlin
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+class MyFeature : KoinComponent {
+    // Inject shared dependencies
+    private val icebreakerRepository: IcebreakerRepository by inject()
+    private val authRepository: AuthRepository by inject()
+    private val subscriptionRepository: SubscriptionRepository by inject()
+    
+    suspend fun generateIcebreaker() {
+        val result = icebreakerRepository.generateIcebreaker(
+            environment = "casual",
+            intensity = "medium",
+            language = "en"
+        )
+        // Handle result
+    }
+}
+```
+
+### Custom Module Integration
+
+```kotlin
+import org.koin.core.module.dsl.singleOf
+import org.koin.dsl.module
+import com.dadomatch.shared.di.getAllModules
+
+val myCustomModule = module {
+    singleOf(::MyCustomService)
+    factoryOf(::MyCustomUseCase)
+}
+
+fun initializeWithCustomModules(context: Context) {
+    startKoin {
+        androidContext(context)
+        modules(getAllModules() + myCustomModule)
+    }
+}
+```
+
+## Database Operations
+
+### Working with Local Data
+
+```kotlin
+import com.dadomatch.shared.feature.success.domain.usecase.AddSuccessUseCase
+import com.dadomatch.shared.feature.success.domain.usecase.GetSuccessesUseCase
+import com.dadomatch.shared.feature.success.domain.model.SuccessRecord
+
+class SuccessTracker : KoinComponent {
+    private val addSuccessUseCase: AddSuccessUseCase by inject()
+    private val getSuccessesUseCase: GetSuccessesUseCase by inject()
+    
+    suspend fun trackSuccess(title: String, description: String) {
+        val success = SuccessRecord(
+            id = 0,
+            title = title,
+            description = description,
+            timestamp = Clock.System.now().toEpochMilliseconds()
+        )
+        
+        addSuccessUseCase(success)
+    }
+    
+    suspend fun getAllSuccesses(): List<SuccessRecord> {
+        return when (val result = getSuccessesUseCase()) {
+            is Resource.Success -> result.data
+            is Resource.Error -> emptyList()
+        }
+    }
+}
+```
+
+## Theme and Styling
+
+### Using Shared Theme
+
+```kotlin
+import com.dadomatch.shared.presentation.ui.theme.AppTheme
+import com.dadomatch.shared.presentation.ui.theme.NeonCyan
+import com.dadomatch.shared.presentation.ui.theme.NeonPink
+
+@Composable
+fun MyCustomScreen() {
+    AppTheme {
+        Column {
+            Text(
+                text = "Premium Feature",
+                color = NeonCyan,
+                style = MaterialTheme.typography.headlineMedium
+            )
+            
+            Button(
+                onClick = { },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = NeonPink
+                )
+            ) {
+                Text("Subscribe Now")
+            }
+        }
+    }
+}
+```
+
+## Resources and Localization
+
+### Accessing Shared Resources
+
+```kotlin
+import com.dadomatch.shared.shared.generated.resources.Res
+import com.dadomatch.shared.shared.generated.resources.*
+import org.jetbrains.compose.resources.stringResource
+
+@Composable
+fun LocalizedContent() {
+    Column {
+        Text(stringResource(Res.string.nav_home))
+        Text(stringResource(Res.string.nav_profile))
+        Text(stringResource(Res.string.nav_settings))
+    }
+}
+```
+
+<Accordion title="View complete integration example">
+
+```kotlin Complete Android Integration
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Initialize SDK
+        initKoinAndroid(applicationContext)
+        
+        setContent {
+            AppTheme {
+                Surface {
+                    AppNavigation()
+                }
+            }
+        }
+    }
+}
+```
+
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Troubleshooting" icon="wrench" href="/resources/troubleshooting">
+    Common issues and solutions
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/core/koin-initializer">
+    Complete API documentation
+  </Card>
+</CardGroup>

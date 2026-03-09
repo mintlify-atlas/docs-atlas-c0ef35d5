@@ -1,0 +1,131 @@
+---
+title: 'KoinInitializer'
+description: 'Dependency injection initialization for DadoMatch Shared SDK'
+---
+
+## Overview
+
+The `KoinInitializer` module provides functions to initialize the Koin dependency injection framework for the DadoMatch Shared SDK. It handles the setup of all required modules and initializes platform-specific services like RevenueCat.
+
+## Functions
+
+### initKoin
+
+Initializes the Koin dependency injection framework with all required modules.
+
+```kotlin
+fun initKoin(appDeclaration: KoinAppDeclaration = {})
+```
+
+<ParamField path="appDeclaration" type="KoinAppDeclaration" default="{}">
+  Optional lambda to configure additional Koin application settings. Defaults to an empty configuration.
+</ParamField>
+
+#### Behavior
+
+- Checks if Koin context already exists to prevent re-initialization
+- Starts Koin with the provided `appDeclaration` and all SDK modules
+- Automatically configures RevenueCat with the API key from build configuration
+- Syncs logged-in user with RevenueCat if a non-anonymous user is already authenticated
+- Handles Firebase initialization gracefully if not ready on some platforms
+
+#### Usage
+
+<CodeGroup>
+
+```kotlin Basic Usage
+import com.dadomatch.shared.initKoin
+
+fun main() {
+    initKoin()
+}
+```
+
+```kotlin Custom Configuration
+import com.dadomatch.shared.initKoin
+import org.koin.core.logger.Level
+
+fun main() {
+    initKoin {
+        // Configure Koin logger level
+        printLogger(Level.DEBUG)
+        // Add platform-specific properties
+        properties(mapOf("platform" to "iOS"))
+    }
+}
+```
+
+</CodeGroup>
+
+### initKoin (iOS)
+
+Convenience function for iOS platform initialization without parameters.
+
+```kotlin
+fun initKoin()
+```
+
+This is an overloaded version specifically designed for iOS clients that don't need custom configuration. It internally calls `initKoin {}` with default settings.
+
+#### Usage
+
+<CodeGroup>
+
+```swift iOS Integration
+import Shared
+
+func initializeSDK() {
+    KoinInitializerKt.initKoin()
+}
+```
+
+```kotlin Android Integration
+import com.dadomatch.shared.initKoin
+
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        initKoin()
+    }
+}
+```
+
+</CodeGroup>
+
+## Implementation Details
+
+<Expandable title="Internal Initialization Process">
+
+1. **Context Check**: Verifies if Koin is already initialized using `KoinPlatformTools.defaultContext().getOrNull()`
+2. **Module Loading**: Loads all SDK modules via `getAllModules()` from the dependency injection configuration
+3. **RevenueCat Setup**: Retrieves RevenueCat service from Koin and configures it with `BuildKonfig.REVENUECAT_API_KEY`
+4. **User Sync**: Launches a coroutine on `Dispatchers.Default` to check for authenticated Firebase users
+5. **Login State**: If a non-anonymous user exists, syncs their UID with RevenueCat using `revenueCatService.logIn()`
+6. **Error Handling**: Catches and safely ignores Firebase exceptions during initialization
+
+</Expandable>
+
+## Important Notes
+
+<Warning>
+  Call `initKoin()` only once during application startup. Multiple calls are safe due to the internal context check, but unnecessary re-initialization attempts should be avoided.
+</Warning>
+
+<Info>
+  The function automatically handles RevenueCat configuration and user synchronization, so no additional setup is required for subscription management.
+</Info>
+
+## Related APIs
+
+- [EnvironmentConfig](/api/core/environment-config) - Access build configuration values
+- [Resource](/api/core/resource) - Handle asynchronous operation results
+
+## Package
+
+```kotlin
+package com.dadomatch.shared
+```
+
+## Source Location
+
+`shared/src/commonMain/kotlin/com/dadomatch/shared/KoinInitializer.kt`

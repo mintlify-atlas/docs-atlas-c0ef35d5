@@ -1,0 +1,273 @@
+---
+title: AuthViewModel
+description: ViewModel for managing authentication UI state in DadoMatch Shared SDK
+---
+
+## Overview
+
+`AuthViewModel` is an Android `ViewModel` that manages authentication UI state and coordinates between the native authentication handlers and the authentication repository. It provides a reactive UI state and methods for triggering authentication flows.
+
+**Location:** `com.dadomatch.shared.feature.auth.presentation.viewmodel.AuthViewModel`
+
+**Extends:** `androidx.lifecycle.ViewModel`
+
+## Constructor
+
+```kotlin
+class AuthViewModel(
+    private val authRepository: AuthRepository,
+    private val subscriptionRepository: SubscriptionRepository,
+    private val nativeAuthHandler: NativeAuthHandler
+) : ViewModel()
+```
+
+<ParamField path="authRepository" type="AuthRepository" required>
+  Repository for authentication operations
+</ParamField>
+
+<ParamField path="subscriptionRepository" type="SubscriptionRepository" required>
+  Repository for managing user subscriptions. Called after successful sign-in
+</ParamField>
+
+<ParamField path="nativeAuthHandler" type="NativeAuthHandler" required>
+  Platform-specific handler for native authentication flows (Google/Apple)
+</ParamField>
+
+## Properties
+
+<ParamField path="uiState" type="StateFlow<AuthUiState>">
+  A Kotlin StateFlow that emits the current UI state for authentication screens.
+  
+  Observers can collect this Flow to update UI based on loading state, user status, and errors.
+</ParamField>
+
+## Methods
+
+### triggerGoogleSignIn
+
+<ParamField path="triggerGoogleSignIn" type="fun">
+  Initiates the native Google Sign-In flow.
+  
+  ```kotlin
+  fun triggerGoogleSignIn()
+  ```
+  
+  **Behavior:**
+  1. Sets `isLoading = true` and clears any previous errors
+  2. Calls `nativeAuthHandler.signInWithGoogle()` to get tokens
+  3. On success, calls `authRepository.signInWithGoogle()` with the tokens
+  4. Logs in to subscription service on successful authentication
+  5. Updates UI state with user or error
+  
+  **Side effects:**
+  - Updates `uiState` throughout the flow
+  - Calls `subscriptionRepository.logIn()` on success
+</ParamField>
+
+### triggerAppleSignIn
+
+<ParamField path="triggerAppleSignIn" type="fun">
+  Initiates the native Apple Sign-In flow.
+  
+  ```kotlin
+  fun triggerAppleSignIn()
+  ```
+  
+  **Behavior:**
+  1. Sets `isLoading = true` and clears any previous errors
+  2. Calls `nativeAuthHandler.signInWithApple()` to get tokens
+  3. On success, calls `authRepository.signInWithApple()` with the tokens
+  4. Logs in to subscription service on successful authentication
+  5. Updates UI state with user or error
+  
+  **Side effects:**
+  - Updates `uiState` throughout the flow
+  - Calls `subscriptionRepository.logIn()` on success
+</ParamField>
+
+### signInAnonymously
+
+<ParamField path="signInAnonymously" type="fun">
+  Signs in the user anonymously without requiring credentials.
+  
+  ```kotlin
+  fun signInAnonymously()
+  ```
+  
+  **Behavior:**
+  1. Sets `isLoading = true` and clears any previous errors
+  2. Calls `authRepository.signInAnonymously()`
+  3. Updates UI state with user or error
+  
+  **Note:** Anonymous sign-in does NOT trigger subscription login
+  
+  **Side effects:**
+  - Updates `uiState` with the result
+</ParamField>
+
+### dismissError
+
+<ParamField path="dismissError" type="fun">
+  Clears the current error from the UI state.
+  
+  ```kotlin
+  fun dismissError()
+  ```
+  
+  Call this method when the user acknowledges an error message (e.g., dismisses an error dialog).
+</ParamField>
+
+## State Model
+
+### AuthUiState
+
+```kotlin
+data class AuthUiState(
+    val isLoading: Boolean = false,
+    val user: AuthUser? = null,
+    val error: String? = null
+)
+```
+
+<ResponseField name="isLoading" type="Boolean" default="false">
+  Whether an authentication operation is in progress. Use this to show loading indicators.
+</ResponseField>
+
+<ResponseField name="user" type="AuthUser?" default="null">
+  The currently authenticated user. `null` if no user is signed in.
+  
+  This property is automatically updated by observing `authRepository.currentUser`.
+</ResponseField>
+
+<ResponseField name="error" type="String?" default="null">
+  Error message from the last failed authentication attempt. `null` if no error.
+  
+  Display this to the user and call `dismissError()` when acknowledged.
+</ResponseField>
+
+## Usage Example
+
+### Compose UI Integration
+
+```kotlin
+@Composable
+fun AuthScreen(viewModel: AuthViewModel) {
+    val uiState by viewModel.uiState.collectAsState()
+    
+    Column {
+        when {
+            uiState.isLoading -> {
+                CircularProgressIndicator()
+            }
+            uiState.user != null -> {
+                Text("Welcome, ${uiState.user?.displayName}!")
+            }
+            else -> {
+                Button(onClick = { viewModel.triggerGoogleSignIn() }) {
+                    Text("Sign in with Google")
+                }
+                
+                Button(onClick = { viewModel.triggerAppleSignIn() }) {
+                    Text("Sign in with Apple")
+                }
+                
+                Button(onClick = { viewModel.signInAnonymously() }) {
+                    Text("Continue as Guest")
+                }
+            }
+        }
+        
+        // Error handling
+        uiState.error?.let { errorMessage ->
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissError() },
+                title = { Text("Authentication Error") },
+                text = { Text(errorMessage) },
+                confirmButton = {
+                    Button(onClick = { viewModel.dismissError() }) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
+    }
+}
+```
+
+### Traditional Android View
+
+```kotlin
+class AuthActivity : AppCompatActivity() {
+    private val viewModel: AuthViewModel by viewModels()
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Observe UI state
+        lifecycleScope.launch {
+            viewModel.uiState.collect { state ->
+                updateUI(state)
+            }
+        }
+        
+        // Set up buttons
+        binding.googleSignInButton.setOnClickListener {
+            viewModel.triggerGoogleSignIn()
+        }
+        
+        binding.appleSignInButton.setOnClickListener {
+            viewModel.triggerAppleSignIn()
+        }
+        
+        binding.guestButton.setOnClickListener {
+            viewModel.signInAnonymously()
+        }
+    }
+    
+    private fun updateUI(state: AuthUiState) {
+        binding.progressBar.isVisible = state.isLoading
+        
+        state.error?.let { error ->
+            Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+            viewModel.dismissError()
+        }
+        
+        state.user?.let { user ->
+            // Navigate to main screen
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+        }
+    }
+}
+```
+
+## Implementation Details
+
+### Initialization
+
+On initialization, the ViewModel automatically starts collecting the `authRepository.currentUser` Flow and updates the UI state accordingly. This ensures the UI always reflects the current authentication state.
+
+### Error Handling
+
+Errors are captured at two levels:
+1. **Native handler errors**: Errors from the platform-specific authentication UI (e.g., user cancellation)
+2. **Repository errors**: Errors from Firebase authentication (e.g., network issues, invalid credentials)
+
+All errors are propagated to the UI state as human-readable messages.
+
+### Subscription Integration
+
+After successful Google or Apple sign-in, the ViewModel automatically calls `subscriptionRepository.logIn(user.id)` to synchronize the user's subscription status. This does NOT happen for anonymous sign-in.
+
+## Threading Model
+
+- All operations run in the `viewModelScope`
+- State updates are thread-safe using `MutableStateFlow.update`
+- Suspend functions are launched as coroutines
+- UI state emissions happen on the main thread
+
+## Related
+
+- [AuthRepository](/api/auth/auth-repository) - Core authentication operations
+- [NativeAuthHandler](/api/auth/native-auth-handler) - Platform-specific authentication UI
+- [AuthUser](/api/auth/auth-repository#authuser) - User data model

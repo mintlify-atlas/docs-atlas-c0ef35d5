@@ -1,0 +1,750 @@
+---
+title: 'UI Components'
+description: 'Ready-to-use Compose Multiplatform UI components from the DadoMatch Shared SDK'
+icon: 'palette'
+---
+
+The DadoMatch Shared SDK includes a rich set of pre-built UI components following Material Design 3 principles with a modern, neon-themed aesthetic. All components are built with Compose Multiplatform for iOS and Android.
+
+## Theme System
+
+The SDK uses a consistent color palette and typography:
+
+```kotlin
+object AppTheme {
+    val DeepDarkBlue = Color(0xFF0A0E27)
+    val DarkSurface = Color(0xFF1A1F3A)
+    val NeonCyan = Color(0xFF00F5FF)
+    val NeonPink = Color(0xFFFF006E)
+    val TextWhite = Color(0xFFFFFFFF)
+    val TextGray = Color(0xFFB0B3C1)
+}
+```
+
+## Dialog Components
+
+### IcebreakerDialog
+
+Displays generated icebreakers with glassmorphic styling:
+
+```kotlin
+@Composable
+fun IcebreakerDialog(
+    text: String,
+    onDismiss: () -> Unit
+)
+```
+
+**Usage Example:**
+
+```kotlin
+if (showIcebreaker) {
+    IcebreakerDialog(
+        text = "What's your favorite pizza topping? Mine's controversial.",
+        onDismiss = { showIcebreaker = false }
+    )
+}
+```
+
+**Implementation Details:**
+
+From `IcebreakerDialog.kt:22-54`:
+
+```kotlin
+AlertDialog(
+    onDismissRequest = onDismiss,
+    containerColor = DarkSurface,
+    title = {
+        Text(
+            "Your Icebreaker",
+            color = NeonCyan,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+    },
+    text = {
+        Text(
+            text,
+            color = TextWhite,
+            fontSize = 18.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+    },
+    confirmButton = {
+        TextButton(onClick = onDismiss) {
+            Text("Got it!", color = NeonPink)
+        }
+    },
+    shape = RoundedCornerShape(16.dp)
+)
+```
+
+<Note>
+  The dialog automatically centers text and uses theme colors for consistency across the app.
+</Note>
+
+### ActionChoiceDialog
+
+Prompts users about icebreaker usage:
+
+```kotlin
+@Composable
+fun ActionChoiceDialog(
+    onChoice: (used: Boolean) -> Unit
+)
+```
+
+**Implementation:**
+
+```kotlin
+if (showActionChoices) {
+    ActionChoiceDialog(
+        onChoice = { used ->
+            if (used) {
+                // Show feedback dialog
+                showFeedbackDialog = true
+            } else {
+                // Just dismiss
+            }
+            showActionChoices = false
+        }
+    )
+}
+```
+
+### FeedbackDialog
+
+Collects user feedback on generated icebreakers:
+
+```kotlin
+@Composable
+fun FeedbackDialog(
+    onSubmit: (feedback: IcebreakerFeedback) -> Unit
+)
+```
+
+**Usage:**
+
+```kotlin
+if (showFeedbackDialog) {
+    FeedbackDialog(
+        onSubmit = { feedback ->
+            viewModel.onSubmitFeedback(feedback)
+            showFeedbackDialog = false
+        }
+    )
+}
+```
+
+**Feedback Options:**
+
+```kotlin
+enum class IcebreakerFeedback {
+    GOOD,     // Positive feedback
+    BAD,      // Negative feedback
+    USED,     // Successfully used
+    IGNORED   // Didn't use
+}
+```
+
+## Button Components
+
+### LaunchButton
+
+A premium gradient button for triggering icebreaker generation:
+
+```kotlin
+@Composable
+fun LaunchButton(
+    onClick: () -> Unit,
+    environmentColor: Color,
+    intensityColor: Color,
+    modifier: Modifier = Modifier
+)
+```
+
+**Implementation from source:**
+
+From `LaunchButton.kt:30-74`:
+
+```kotlin
+Button(
+    onClick = onClick,
+    modifier = modifier
+        .fillMaxWidth()
+        .height(64.dp)
+        .padding(bottom = 4.dp)
+        .shadow(
+            elevation = 20.dp,
+            shape = RoundedCornerShape(32.dp),
+            ambientColor = NeonPink,
+            spotColor = NeonCyan
+        ),
+    shape = RoundedCornerShape(32.dp),
+    colors = ButtonDefaults.buttonColors(
+        containerColor = Color.Transparent
+    ),
+    contentPadding = PaddingValues()
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.horizontalGradient(
+                    listOf(environmentColor, intensityColor)
+                ),
+                shape = RoundedCornerShape(32.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Launch",
+            color = TextWhite,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 2.sp
+        )
+    }
+}
+```
+
+**Usage Example:**
+
+```kotlin
+val environmentColor = AppConstants.getEnvironmentColor(selectedEnvironment)
+val intensityColor = AppConstants.getIntensityColor(selectedIntensity)
+
+LaunchButton(
+    onClick = {
+        rolling = true
+        viewModel.dismissIcebreaker()
+    },
+    environmentColor = environmentColor,
+    intensityColor = intensityColor
+)
+```
+
+<Note>
+  The button creates a dynamic gradient based on the selected environment and intensity, providing visual feedback for user choices.
+</Note>
+
+### SocialAuthButton
+
+Pre-styled authentication buttons for Google and Apple:
+
+```kotlin
+@Composable
+fun SocialAuthButton(
+    text: String,
+    icon: String,
+    backgroundColor: Color,
+    contentColor: Color,
+    onClick: () -> Unit,
+    isGoogle: Boolean = false
+)
+```
+
+**Example:**
+
+```kotlin
+SocialAuthButton(
+    text = "Continue with Google",
+    icon = "G",
+    backgroundColor = Color.White,
+    contentColor = Color.Black,
+    onClick = { authViewModel.triggerGoogleSignIn() },
+    isGoogle = true
+)
+```
+
+## Selector Components
+
+### SelectorGroup
+
+A horizontal selector for environment and intensity options:
+
+```kotlin
+@Composable
+fun SelectorGroup(
+    title: String,
+    options: List<String>,
+    selectedOption: String,
+    onOptionSelected: (String) -> Unit,
+    selectionColorProvider: (String) -> Color,
+    iconProvider: (String) -> String,
+    isRestricted: ((String) -> Boolean)? = null
+)
+```
+
+**Usage from HomeScreen:**
+
+```kotlin
+// Environment Selector
+SelectorGroup(
+    title = "Environment",
+    options = AppConstants.ENVIRONMENTS,
+    selectedOption = selectedEnvironment,
+    onOptionSelected = { selectedEnvironment = it },
+    selectionColorProvider = { AppConstants.getEnvironmentColor(it) },
+    iconProvider = { AppConstants.getEnvironmentIcon(it) }
+)
+
+// Intensity Selector with premium restrictions
+SelectorGroup(
+    title = "Intensity",
+    options = AppConstants.INTENSITIES,
+    selectedOption = selectedIntensity,
+    onOptionSelected = { selectedIntensity = it },
+    selectionColorProvider = { AppConstants.getIntensityColor(it) },
+    iconProvider = { AppConstants.getIntensityIcon(it) },
+    isRestricted = { option -> option == "int_spicy" && !uiState.isPremium }
+)
+```
+
+**Features:**
+
+- Horizontal scrolling for multiple options
+- Custom color per option
+- Icon support
+- Premium restriction badges
+- Smooth selection animations
+
+<Warning>
+  Always provide the `isRestricted` callback to lock premium content for free users. This provides visual feedback before the user attempts to use restricted features.
+</Warning>
+
+## Card Components
+
+### SubscriptionCard
+
+Displays subscription status with premium styling:
+
+```kotlin
+@Composable
+fun SubscriptionCard(
+    modifier: Modifier = Modifier,
+    status: SubscriptionStatus?,
+    onUpgradeClick: () -> Unit
+)
+```
+
+**Overloaded version with ViewModel:**
+
+```kotlin
+@Composable
+fun SubscriptionCard(
+    modifier: Modifier = Modifier,
+    viewModel: SubscriptionViewModel,
+    isAnonymous: Boolean = false,
+    onNavigateToPaywall: () -> Unit
+)
+```
+
+**Usage Examples:**
+
+<CodeGroup>
+
+```kotlin Manual State
+@Composable
+fun SettingsScreen() {
+    val viewModel: SubscriptionViewModel = koinViewModel()
+    val status by viewModel.subscriptionStatus.collectAsState()
+    
+    SubscriptionCard(
+        modifier = Modifier.padding(16.dp),
+        status = status,
+        onUpgradeClick = { /* Navigate to paywall */ }
+    )
+}
+```
+
+```kotlin With ViewModel
+@Composable
+fun ProfileScreen() {
+    val viewModel: SubscriptionViewModel = koinViewModel()
+    
+    SubscriptionCard(
+        viewModel = viewModel,
+        onNavigateToPaywall = { /* Navigate to paywall */ }
+    )
+}
+```
+
+</CodeGroup>
+
+**Visual Features:**
+
+From `SubscriptionCard.kt:47-102`:
+
+- **Premium gradient**: Pink/purple gradient for premium users
+- **Glass morphism**: Subtle white overlay for free users
+- **Star icon**: Gold star for premium, dimmed for free
+- **Rolls counter**: Shows remaining daily rolls for free users
+- **Renewal period**: Displays billing cycle for subscribers
+- **CTA button**: "Upgrade" for free users, "Manage" for premium
+
+## Bottom Sheet Components
+
+### AuthBottomSheet
+
+A complete authentication interface with glassmorphic design:
+
+```kotlin
+@Composable
+fun AuthBottomSheet(
+    viewModel: AuthViewModel,
+    onDismiss: () -> Unit
+)
+```
+
+**Full Implementation:**
+
+```kotlin
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MyScreen() {
+    val authViewModel: AuthViewModel = koinViewModel()
+    val authUiState by authViewModel.uiState.collectAsState()
+    var showAuth by remember { mutableStateOf(false) }
+    
+    val sheetState = rememberModalBottomSheetState(
+        confirmValueChange = { targetValue ->
+            // Prevent swipe-to-dismiss while sign-in is in progress
+            if (authUiState.isLoading && targetValue == SheetValue.Hidden) false
+            else true
+        }
+    )
+    
+    if (showAuth) {
+        ModalBottomSheet(
+            onDismissRequest = { 
+                if (!authUiState.isLoading) showAuth = false 
+            },
+            sheetState = sheetState,
+            containerColor = Color.Transparent,
+            scrimColor = Color.Black.copy(alpha = 0.5f)
+        ) {
+            AuthBottomSheet(
+                viewModel = authViewModel,
+                onDismiss = { showAuth = false }
+            )
+        }
+    }
+}
+```
+
+**Features:**
+
+- Glassmorphic container with gradient background
+- Prevents dismissal during authentication
+- Auto-dismisses on successful sign-in
+- Loading state with circular progress
+- Error display with retry option
+- Terms and conditions text
+
+## Animation Components
+
+### RizzDice
+
+An animated dice component for the roll animation:
+
+```kotlin
+@Composable
+fun RizzDice(
+    rolling: Boolean,
+    onRollComplete: (result: Int) -> Unit,
+    modifier: Modifier = Modifier
+)
+```
+
+**Usage:**
+
+```kotlin
+var rolling by remember { mutableStateOf(false) }
+
+RizzDice(
+    rolling = rolling,
+    onRollComplete = { result ->
+        rolling = false
+        val currentLanguage = Locale.current.language
+        viewModel.onRollComplete(
+            selectedEnvironment, 
+            selectedIntensity, 
+            currentLanguage
+        )
+    },
+    modifier = Modifier.size(180.dp)
+)
+
+// Trigger the roll
+LaunchButton(
+    onClick = { rolling = true }
+)
+```
+
+## Screen Components
+
+### PaywallScreen
+
+Complete paywall implementation with RevenueCat:
+
+```kotlin
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PaywallScreen(onDismiss: () -> Unit = {})
+```
+
+**Features:**
+
+- Authentication requirement check
+- RevenueCat paywall integration
+- Purchase completion handling
+- Restore purchases support
+- Rolls counter overlay for free users
+
+**Implementation:**
+
+```kotlin
+@Composable
+fun MyApp() {
+    var showPaywall by remember { mutableStateOf(false) }
+    
+    // Trigger paywall when needed
+    if (needsPremium) {
+        showPaywall = true
+    }
+    
+    if (showPaywall) {
+        PaywallScreen(
+            onDismiss = { showPaywall = false }
+        )
+    }
+}
+```
+
+### HomeScreen
+
+The complete main screen with all features integrated:
+
+```kotlin
+@Composable
+fun HomeScreen(
+    onNavigateToPaywall: () -> Unit = {}
+)
+```
+
+**Integrated Components:**
+
+- App logo and title
+- Profile icon for anonymous users
+- RizzDice animation
+- Environment selector
+- Intensity selector
+- Launch button
+- Icebreaker dialog
+- Action choice dialog
+- Feedback dialog
+- Loading overlay
+- Error state
+- Onboarding screen
+- Auth bottom sheet
+
+## Utility Components
+
+### EmptyState
+
+Displays empty or error states:
+
+```kotlin
+@Composable
+fun EmptyState(
+    title: String,
+    description: String,
+    icon: String,
+    buttonText: String? = null,
+    onButtonClick: (() -> Unit)? = null
+)
+```
+
+**Usage:**
+
+```kotlin
+if (uiState.error != null) {
+    EmptyState(
+        title = "Something went wrong",
+        description = uiState.error ?: "Unknown error",
+        icon = "😵‍💫",
+        buttonText = "Try Again",
+        onButtonClick = { viewModel.retry() }
+    )
+}
+```
+
+### AppLogo
+
+Consistent app logo component:
+
+```kotlin
+@Composable
+fun AppLogo(
+    modifier: Modifier = Modifier
+)
+```
+
+**Usage:**
+
+```kotlin
+Box(modifier = Modifier.fillMaxWidth()) {
+    AppLogo(modifier = Modifier.align(Alignment.Center))
+}
+```
+
+## Styling Best Practices
+
+<Steps>
+  <Step title="Use Theme Colors">
+    Always use theme colors for consistency:
+
+    ```kotlin
+    Text(
+        text = "Welcome",
+        color = TextWhite,  // Not Color.White
+        style = MaterialTheme.typography.headlineMedium
+    )
+    ```
+  </Step>
+
+  <Step title="Apply Consistent Shapes">
+    Use consistent corner radius:
+
+    ```kotlin
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))  // Standard radius
+            .background(DarkSurface)
+    )
+    ```
+  </Step>
+
+  <Step title="Implement Glassmorphism">
+    Create depth with gradient backgrounds and borders:
+
+    ```kotlin
+    Box(
+        modifier = Modifier
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF1E1E2C).copy(alpha = 0.9f),
+                        DeepDarkBlue.copy(alpha = 0.98f)
+                    )
+                )
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.3f),
+                        Color.Transparent
+                    )
+                )
+            )
+    )
+    ```
+  </Step>
+
+  <Step title="Add Shadow Effects">
+    Use shadow modifiers for depth:
+
+    ```kotlin
+    Button(
+        modifier = Modifier.shadow(
+            elevation = 20.dp,
+            shape = RoundedCornerShape(32.dp),
+            ambientColor = NeonPink,
+            spotColor = NeonCyan
+        )
+    )
+    ```
+  </Step>
+</Steps>
+
+## Responsive Layout
+
+All components are designed to work across different screen sizes:
+
+```kotlin
+@Composable
+fun ResponsiveCard() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()  // Adapt to screen width
+            .padding(horizontal = 16.dp)  // Consistent padding
+            .clip(RoundedCornerShape(24.dp))
+    ) {
+        // Content
+    }
+}
+```
+
+## Accessibility
+
+Components include accessibility support:
+
+```kotlin
+IconButton(
+    onClick = { /* ... */ }
+) {
+    Icon(
+        imageVector = Icons.Default.AccountCircle,
+        contentDescription = "Profile",  // Screen reader support
+        tint = TextGray
+    )
+}
+```
+
+## Custom Component Example
+
+Create your own themed components:
+
+```kotlin
+@Composable
+fun CustomPremiumBadge(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = NeonPink.copy(alpha = 0.2f),
+        border = BorderStroke(1.dp, NeonPink)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = null,
+                tint = NeonPink,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = text,
+                color = NeonPink,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+```
+
+## Next Steps
+
+- Learn about [Authentication](/guides/authentication) to use auth components
+- Explore [Subscription Management](/guides/subscription-management) for subscription cards
+- Check out [Icebreaker Generation](/guides/icebreaker-generation) for generation UI flows

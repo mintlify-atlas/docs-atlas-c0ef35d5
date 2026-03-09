@@ -1,0 +1,448 @@
+---
+title: "Android Integration"
+description: "Integrate DadoMatch Shared SDK into your Android application"
+---
+
+## Overview
+
+The DadoMatch Shared SDK is a Kotlin Multiplatform library that provides shared business logic, UI components, and utilities for Android applications. It includes Compose Multiplatform UI, Ktor for networking, Koin for dependency injection, and more.
+
+## Requirements
+
+- **Android SDK**: API 24+ (Android 7.0)
+- **Java**: JDK 17+
+- **Kotlin**: 2.3.0+
+- **Gradle**: 8.0+
+
+## Integration Methods
+
+<Tabs>
+  <Tab title="Local Development">
+    ### Local Development Integration
+
+    For active development and testing, use Gradle's `includeBuild` feature to directly integrate the SDK from your local filesystem.
+
+    <Steps>
+      <Step title="Clone the SDK Repository">
+        Clone the DadoMatch Shared SDK repository to your local machine:
+
+        ```bash
+        git clone https://github.com/felipechaux/dado-match-shared
+        cd dado-match-shared
+        ```
+      </Step>
+
+      <Step title="Configure Composite Build">
+        Add the SDK to your Android project's `settings.gradle.kts`:
+
+        ```kotlin settings.gradle.kts
+        // Include the local SDK build
+        includeBuild("../dado-match-shared")
+
+        rootProject.name = "YourApp"
+        include(":app")
+        ```
+
+        <Note>
+          Adjust the path `"../dado-match-shared"` to match the relative location of the SDK repository from your project.
+        </Note>
+      </Step>
+
+      <Step title="Add Dependency">
+        Add the SDK dependency to your app's `build.gradle.kts`:
+
+        ```kotlin app/build.gradle.kts
+        dependencies {
+            implementation("com.dadomatch.shared:shared")
+            
+            // Other dependencies...
+        }
+        ```
+      </Step>
+
+      <Step title="Sync and Build">
+        Sync your Gradle files and build the project:
+
+        ```bash
+        ./gradlew build
+        ```
+      </Step>
+    </Steps>
+
+    <Tip>
+      Using `includeBuild` allows you to modify the SDK source code and see changes immediately without publishing artifacts.
+    </Tip>
+  </Tab>
+
+  <Tab title="Remote Package">
+    ### Remote Package Integration
+
+    For production builds, you can integrate the SDK as a remote Maven dependency (when published).
+
+    <Warning>
+      Remote package integration requires the SDK to be published to a Maven repository. Currently, local development with `includeBuild` is the recommended approach.
+    </Warning>
+
+    Add the repository and dependency to your `build.gradle.kts`:
+
+    ```kotlin app/build.gradle.kts
+    repositories {
+        maven {
+            url = uri("https://maven.pkg.github.com/felipechaux/dado-match-shared")
+            credentials {
+                username = project.findProperty("gpr.user") as String? ?: System.getenv("GITHUB_USERNAME")
+                password = project.findProperty("gpr.token") as String? ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+
+    dependencies {
+        implementation("com.dadomatch.shared:shared:1.0.0")
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Initialization
+
+### Application Setup
+
+Initialize the SDK in your `Application` class to set up Koin, Firebase, and other core services.
+
+<Steps>
+  <Step title="Create Application Class">
+    Create or update your Application class:
+
+    ```kotlin MainActivity.kt
+    import android.app.Application
+    import com.dadomatch.shared.initKoinAndroid
+
+    class YourApplication : Application() {
+        override fun onCreate() {
+            super.onCreate()
+            
+            // Initialize the DadoMatch Shared SDK
+            initKoinAndroid(this)
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Register in AndroidManifest.xml">
+    Register your Application class in your `AndroidManifest.xml`:
+
+    ```xml AndroidManifest.xml
+    <application
+        android:name=".YourApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.YourApp">
+        
+        <!-- Your activities -->
+        
+    </application>
+    ```
+  </Step>
+
+  <Step title="Add Required Permissions">
+    Add necessary permissions to your `AndroidManifest.xml`:
+
+    ```xml AndroidManifest.xml
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    ```
+  </Step>
+</Steps>
+
+### What `initKoinAndroid` Does
+
+The initialization function performs several critical setup tasks:
+
+```kotlin KoinInitializer.android.kt
+fun initKoinAndroid(context: Context) {
+    // 1. Initialize Firebase
+    dev.gitlive.firebase.Firebase.initialize(context)
+    
+    // 2. Initialize Room Database
+    initializeDatabase(context)
+    
+    // 3. Initialize DataStore for preferences
+    initializeDataStore(context)
+    
+    // 4. Start Koin dependency injection
+    initKoin {
+        androidContext(context)
+    }
+}
+```
+
+<Note>
+  The SDK automatically configures RevenueCat for in-app purchases and syncs authenticated users.
+</Note>
+
+## Configuration
+
+### Environment Variables
+
+The SDK uses BuildKonfig for environment-specific configuration. Create a `local.properties` file in your project root:
+
+```properties local.properties
+# API Configuration
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL_NAME=gemini-2.5-flash-lite
+
+# RevenueCat Keys
+STAGE_REVENUECAT_API_KEY=your_stage_key
+PROD_REVENUECAT_API_KEY=your_prod_key
+
+# API Endpoints
+STAGE_API_BASE_URL=https://api-stage.dadomatch.com
+PROD_API_BASE_URL=https://api.dadomatch.com
+
+# Google Sign-In
+GOOGLE_WEB_CLIENT_ID=your_google_web_client_id
+
+# Build Flavor (stage or production)
+app.flavor=stage
+```
+
+<Warning>
+  Never commit `local.properties` to version control. Add it to your `.gitignore` file.
+</Warning>
+
+### Firebase Setup
+
+<Steps>
+  <Step title="Add Firebase Configuration">
+    Download your `google-services.json` from the Firebase Console and place it in your `app/` directory.
+  </Step>
+
+  <Step title="Apply Google Services Plugin">
+    Add the Google Services plugin to your app's `build.gradle.kts`:
+
+    ```kotlin app/build.gradle.kts
+    plugins {
+        id("com.android.application")
+        id("org.jetbrains.kotlin.android")
+        id("com.google.gms.google-services")
+    }
+    ```
+  </Step>
+
+  <Step title="Add Plugin to Project">
+    Add the plugin dependency to your project's `build.gradle.kts`:
+
+    ```kotlin build.gradle.kts
+    buildscript {
+        dependencies {
+            classpath("com.google.gms:google-services:4.4.2")
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Using the SDK
+
+### Accessing Compose UI
+
+The SDK provides ready-to-use Compose UI components:
+
+```kotlin MainActivity.kt
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import com.dadomatch.shared.presentation.ui.navigation.AppNavigation
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        setContent {
+            // Use the SDK's complete navigation
+            AppNavigation()
+        }
+    }
+}
+```
+
+### Dependency Injection with Koin
+
+Access SDK components through Koin:
+
+```kotlin YourViewModel.kt
+import androidx.lifecycle.ViewModel
+import com.dadomatch.shared.feature.auth.domain.repository.AuthRepository
+import org.koin.android.annotation.KoinViewModel
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+class YourViewModel : ViewModel(), KoinComponent {
+    // Inject SDK repositories
+    private val authRepository: AuthRepository by inject()
+    
+    fun signIn() {
+        // Use SDK functionality
+    }
+}
+```
+
+### Using SDK Features
+
+#### Authentication
+
+```kotlin
+import com.dadomatch.shared.feature.auth.domain.repository.AuthRepository
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+class AuthExample : KoinComponent {
+    private val authRepository: AuthRepository by inject()
+    
+    suspend fun authenticateUser() {
+        val result = authRepository.signInAnonymously()
+        result.fold(
+            onSuccess = { user -> println("Authenticated: ${user.uid}") },
+            onFailure = { error -> println("Error: $error") }
+        )
+    }
+}
+```
+
+#### Subscriptions with RevenueCat
+
+```kotlin
+import com.dadomatch.shared.feature.subscription.domain.repository.SubscriptionRepository
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+class SubscriptionExample : KoinComponent {
+    private val subscriptionRepository: SubscriptionRepository by inject()
+    
+    suspend fun checkProStatus() {
+        val status = subscriptionRepository.getSubscriptionStatus()
+        if (status.isPro) {
+            println("User has Pro subscription")
+        }
+    }
+}
+```
+
+## Build Configuration
+
+### Gradle Properties
+
+The SDK requires specific Gradle configurations. Add to your `gradle.properties`:
+
+```properties gradle.properties
+android.useAndroidX=true
+
+# Kotlin Multiplatform
+kotlin.mpp.androidGradlePluginCompatibility.nowarn=true
+
+# Gradle JVM settings
+org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m
+```
+
+### Compilation Options
+
+Ensure your app module uses Java 17:
+
+```kotlin app/build.gradle.kts
+android {
+    compileSdk = 35
+    
+    defaultConfig {
+        minSdk = 24
+        targetSdk = 35
+    }
+    
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    
+    buildFeatures {
+        compose = true
+    }
+}
+```
+
+## Troubleshooting
+
+### Build Errors
+
+<AccordionGroup>
+  <Accordion title="includeBuild not found">
+    **Error**: `Could not read path '../dado-match-shared'`
+    
+    **Solution**: Verify the relative path to the SDK repository. Use an absolute path if needed:
+    
+    ```kotlin
+    includeBuild("/absolute/path/to/dado-match-shared")
+    ```
+  </Accordion>
+
+  <Accordion title="Duplicate class errors">
+    **Error**: `Duplicate class found in modules`
+    
+    **Solution**: Check for conflicting dependencies. Exclude duplicates:
+    
+    ```kotlin
+    implementation("com.dadomatch.shared:shared") {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Koin initialization errors">
+    **Error**: `KoinApplicationAlreadyStartedException`
+    
+    **Solution**: Ensure `initKoinAndroid()` is only called once in your Application class.
+  </Accordion>
+</AccordionGroup>
+
+### Runtime Errors
+
+<AccordionGroup>
+  <Accordion title="Firebase not initialized">
+    **Error**: `Firebase not initialized`
+    
+    **Solution**: Ensure you've added `google-services.json` and applied the Google Services plugin.
+  </Accordion>
+
+  <Accordion title="Missing API keys">
+    **Error**: `API key not configured`
+    
+    **Solution**: Add all required keys to your `local.properties` file and rebuild the project.
+  </Accordion>
+</AccordionGroup>
+
+## Source Code References
+
+- Initialization: `shared/src/androidMain/kotlin/com/dadomatch/shared/KoinInitializer.android.kt`
+- Build configuration: `shared/build.gradle.kts`
+- Android platform module: `shared/src/androidMain/kotlin/com/dadomatch/shared/di/AppModule.android.kt`
+- Manifest: `shared/src/androidMain/AndroidManifest.xml`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Learn about the SDK's architecture and design patterns
+  </Card>
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Implement user authentication flows
+  </Card>
+  <Card title="UI Components" icon="palette" href="/guides/ui-components">
+    Explore available Compose UI components
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/core/koin-initializer">
+    Browse the complete API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,723 @@
+---
+title: 'Subscription Management'
+description: 'Implement premium subscriptions and in-app purchases with RevenueCat integration'
+icon: 'credit-card'
+---
+
+The DadoMatch Shared SDK provides a complete subscription management system powered by RevenueCat, with built-in paywall UI, entitlement checking, and purchase restoration.
+
+## Architecture Overview
+
+The subscription system follows clean architecture:
+
+- **SubscriptionRepository**: Domain interface for subscription operations
+- **SubscriptionViewModel**: Manages subscription state across the app
+- **PaywallScreen**: Pre-built RevenueCat paywall integration
+- **CheckEntitlementUseCase**: Validates premium feature access
+
+## Quick Start
+
+<Steps>
+  <Step title="Access Subscription State">
+    Inject the `SubscriptionViewModel` to access subscription status:
+
+    ```kotlin
+    @Composable
+    fun MyScreen() {
+        val viewModel: SubscriptionViewModel = koinViewModel()
+        val status by viewModel.subscriptionStatus.collectAsState()
+        
+        when (status?.tier) {
+            SubscriptionTier.PREMIUM -> {
+                Text("You're a premium user!")
+            }
+            SubscriptionTier.FREE -> {
+                Text("Upgrade to premium")
+            }
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Display the Paywall">
+    Use the pre-built `PaywallScreen` component:
+
+    ```kotlin
+    @Composable
+    fun MyApp() {
+        var showPaywall by remember { mutableStateOf(false) }
+        
+        if (showPaywall) {
+            PaywallScreen(
+                onDismiss = { showPaywall = false }
+            )
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Check Entitlements">
+    Validate access to premium features:
+
+    ```kotlin
+    val checkEntitlement: CheckEntitlementUseCase = koinInject()
+    
+    if (checkEntitlement.canAccessCategory("int_spicy")) {
+        // User has access to spicy content
+    } else {
+        // Show paywall
+        showPaywall = true
+    }
+    ```
+  </Step>
+</Steps>
+
+## Subscription Models
+
+### SubscriptionStatus
+
+The main model representing a user's subscription state:
+
+```kotlin
+data class SubscriptionStatus(
+    val tier: SubscriptionTier,
+    val isLifetime: Boolean = false,
+    val expirationDate: Instant? = null,
+    val dailyRollsRemaining: Int? = null,
+    val renewalPeriod: String? = null  // e.g., "monthly", "annual"
+)
+```
+
+### SubscriptionTier
+
+Defines the available subscription tiers:
+
+```kotlin
+enum class SubscriptionTier {
+    FREE,
+    PREMIUM
+}
+```
+
+### Entitlement
+
+Represents premium features:
+
+```kotlin
+enum class Entitlement {
+    UNLIMITED_ROLLS,
+    SPICY_CATEGORY,
+    AD_FREE
+}
+```
+
+## Repository Interface
+
+The `SubscriptionRepository` provides all subscription operations:
+
+```kotlin
+interface SubscriptionRepository {
+    // Observe subscription status
+    fun getSubscriptionStatus(): Flow<SubscriptionStatus>
+    
+    // Get current status (one-time)
+    suspend fun getCurrentSubscriptionStatus(): Result<SubscriptionStatus>
+    
+    // Purchase a subscription
+    suspend fun purchaseSubscription(productId: String): Result<SubscriptionStatus>
+    
+    // Restore previous purchases
+    suspend fun restorePurchases(): Result<SubscriptionStatus>
+    
+    // Check entitlement
+    suspend fun hasEntitlement(entitlement: Entitlement): Boolean
+    
+    // Get available products
+    suspend fun getAvailableProducts(): Result<List<Product>>
+    
+    // Roll management
+    suspend fun decrementDailyRolls(): Result<SubscriptionStatus>
+    suspend fun resetDailyRolls()
+    
+    // User linking
+    suspend fun logIn(userId: String): Result<SubscriptionStatus>
+    suspend fun logOut(): Result<SubscriptionStatus>
+}
+```
+
+## Use Cases
+
+### GetSubscriptionStatusUseCase
+
+Observe or fetch subscription status:
+
+```kotlin
+class GetSubscriptionStatusUseCase(
+    private val subscriptionRepository: SubscriptionRepository
+) {
+    // Reactive flow
+    operator fun invoke(): Flow<SubscriptionStatus> {
+        return subscriptionRepository.getSubscriptionStatus()
+    }
+    
+    // One-time fetch
+    suspend fun getCurrentStatus(): Result<SubscriptionStatus> {
+        return subscriptionRepository.getCurrentSubscriptionStatus()
+    }
+}
+```
+
+**Usage Example:**
+
+```kotlin
+class MyViewModel(
+    private val getSubscriptionStatus: GetSubscriptionStatusUseCase
+) : ViewModel() {
+    
+    init {
+        viewModelScope.launch {
+            // Observe changes
+            getSubscriptionStatus().collect { status ->
+                println("Subscription tier: ${status.tier}")
+                println("Rolls remaining: ${status.dailyRollsRemaining}")
+            }
+        }
+    }
+    
+    suspend fun checkCurrentStatus() {
+        getSubscriptionStatus.getCurrentStatus()
+            .onSuccess { status ->
+                println("Current tier: ${status.tier}")
+            }
+            .onFailure { error ->
+                println("Error: ${error.message}")
+            }
+    }
+}
+```
+
+### PurchaseSubscriptionUseCase
+
+Handle subscription purchases:
+
+```kotlin
+class PurchaseSubscriptionUseCase(
+    private val subscriptionRepository: SubscriptionRepository
+) {
+    suspend operator fun invoke(productId: String): Result<SubscriptionStatus> {
+        return subscriptionRepository.purchaseSubscription(productId)
+    }
+}
+```
+
+**Implementation:**
+
+```kotlin
+class UpgradeViewModel(
+    private val purchaseSubscription: PurchaseSubscriptionUseCase
+) : ViewModel() {
+    
+    fun purchaseMonthly() {
+        viewModelScope.launch {
+            purchaseSubscription("premium_monthly")
+                .onSuccess { status ->
+                    println("Purchase successful! Tier: ${status.tier}")
+                    // Show success animation
+                }
+                .onFailure { error ->
+                    println("Purchase failed: ${error.message}")
+                    // Show error dialog
+                }
+        }
+    }
+}
+```
+
+### CheckEntitlementUseCase
+
+Validate access to premium features:
+
+```kotlin
+class CheckEntitlementUseCase(
+    val subscriptionRepository: SubscriptionRepository
+) {
+    suspend fun hasEntitlement(entitlement: Entitlement): Boolean {
+        return subscriptionRepository.hasEntitlement(entitlement)
+    }
+    
+    fun canAccessCategory(intensity: String): Boolean {
+        // Spicy category requires premium
+        return if (intensity == "int_spicy") {
+            subscriptionRepository.hasEntitlement(Entitlement.SPICY_CATEGORY)
+        } else {
+            true  // Other categories are free
+        }
+    }
+}
+```
+
+## PaywallScreen Component
+
+The SDK includes a fully functional paywall screen with RevenueCat integration:
+
+```kotlin
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PaywallScreen(onDismiss: () -> Unit = {}) {
+    val viewModel: SubscriptionViewModel = koinViewModel()
+    val authViewModel: AuthViewModel = koinViewModel()
+    
+    val status by viewModel.subscriptionStatus.collectAsState()
+    val authUiState by authViewModel.uiState.collectAsState()
+    
+    val isAnonymous = authUiState.user?.isAnonymous ?: true
+    
+    Box(modifier = Modifier.fillMaxSize().background(DeepDarkBlue)) {
+        if (isAnonymous) {
+            // Show login prompt for anonymous users
+            LoginPrompt(
+                onLogin = { /* Show auth sheet */ },
+                onDismiss = onDismiss
+            )
+        } else {
+            // Show RevenueCat paywall
+            Paywall(
+                options = PaywallOptions(
+                    dismissRequest = onDismiss
+                ) {
+                    shouldDisplayDismissButton = true
+                    listener = object : PaywallListener {
+                        override fun onPurchaseCompleted(
+                            customerInfo: CustomerInfo,
+                            storeTransaction: StoreTransaction
+                        ) {
+                            viewModel.refreshStatus()
+                        }
+                        
+                        override fun onRestoreCompleted(customerInfo: CustomerInfo) {
+                            viewModel.refreshStatus()
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+```
+
+<Note>
+  The `PaywallScreen` automatically handles authentication requirements. Anonymous users must sign in before purchasing.
+</Note>
+
+## Authentication Integration
+
+Subscriptions are linked to authenticated users:
+
+```kotlin
+// When user signs in
+authRepository.signInWithGoogle(idToken, accessToken)
+    .onSuccess { user ->
+        // Link subscription data
+        subscriptionRepository.logIn(user.id)
+    }
+
+// When user signs out
+subscriptionRepository.logOut()
+```
+
+**Login Prompt for Anonymous Users:**
+
+From `PaywallScreen.kt:80-110`:
+
+```kotlin
+if (isAnonymous) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Sign In Required",
+            style = MaterialTheme.typography.headlineMedium,
+            color = TextWhite,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Please sign in to purchase a subscription",
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextGray,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(
+            onClick = { showAuthSheet = true },
+            colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+        ) {
+            Text("Sign In", color = Color.Black, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+```
+
+## Daily Roll Management
+
+Free users have limited daily rolls:
+
+```kotlin
+class RollDiceUseCase(
+    private val subscriptionRepository: SubscriptionRepository
+) {
+    suspend operator fun invoke(): Result<Unit> {
+        val status = subscriptionRepository.getCurrentSubscriptionStatus()
+            .getOrNull() ?: return Result.failure(Exception("No status"))
+        
+        // Premium users have unlimited rolls
+        if (status.tier == SubscriptionTier.PREMIUM) {
+            return Result.success(Unit)
+        }
+        
+        // Check if free user has rolls remaining
+        val remaining = status.dailyRollsRemaining ?: 0
+        if (remaining <= 0) {
+            return Result.failure(NoRollsRemainingException())
+        }
+        
+        // Decrement roll count
+        return subscriptionRepository.decrementDailyRolls()
+            .map { Unit }
+    }
+}
+
+class NoRollsRemainingException : Exception("No rolls remaining")
+```
+
+**Handling Roll Limits:**
+
+```kotlin
+viewModelScope.launch {
+    rollDiceUseCase()
+        .onSuccess {
+            // Generate icebreaker
+            generateIcebreaker()
+        }
+        .onFailure { error ->
+            if (error is NoRollsRemainingException) {
+                // Show paywall
+                _uiState.update { it.copy(showPaywallNavigation = true) }
+            } else {
+                // Show error
+                _uiState.update { it.copy(error = error.message) }
+            }
+        }
+}
+```
+
+## SubscriptionCard Component
+
+Display subscription status with a premium card:
+
+```kotlin
+@Composable
+fun SubscriptionCard(
+    modifier: Modifier = Modifier,
+    status: SubscriptionStatus?,
+    onUpgradeClick: () -> Unit
+) {
+    val tier = status?.tier ?: SubscriptionTier.FREE
+    val rollsRemaining = status?.dailyRollsRemaining
+    val isLifetime = status?.isLifetime ?: false
+    val isPro = tier == SubscriptionTier.PREMIUM
+    
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                brush = Brush.linearGradient(
+                    colors = if (isPro) {
+                        listOf(NeonPink.copy(alpha = 0.8f), Color(0xFF8E24AA))
+                    } else {
+                        listOf(
+                            Color.White.copy(alpha = 0.05f), 
+                            Color.White.copy(alpha = 0.08f)
+                        )
+                    }
+                )
+            )
+            .padding(24.dp)
+    ) {
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    Text(
+                        text = "Current Plan",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextWhite.copy(alpha = 0.6f)
+                    )
+                    
+                    val tierText = when {
+                        isLifetime -> "Lifetime Premium"
+                        isPro -> "Premium"
+                        else -> "Free"
+                    }
+                    
+                    Text(
+                        text = tierText,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = if (isPro) TextWhite else NeonCyan,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+                
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = if (isPro) Color(0xFFFFD700) else TextWhite.copy(alpha = 0.2f),
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = if (isPro) {
+                    "Unlimited rolls • All categories • Ad-free"
+                } else {
+                    "Limited daily rolls • Basic categories"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextWhite.copy(alpha = 0.8f)
+            )
+            
+            if (!isPro && rollsRemaining != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "$rollsRemaining rolls left today",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NeonPink,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Button(
+                onClick = onUpgradeClick,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isPro) 
+                        Color.White.copy(alpha = 0.2f) 
+                    else 
+                        NeonCyan
+                )
+            ) {
+                Text(
+                    text = if (isPro) "Manage Subscription" else "Upgrade to Premium",
+                    color = if (isPro) TextWhite else Color.Black,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+```
+
+**Usage:**
+
+```kotlin
+@Composable
+fun SettingsScreen() {
+    val viewModel: SubscriptionViewModel = koinViewModel()
+    val status by viewModel.subscriptionStatus.collectAsState()
+    
+    SubscriptionCard(
+        status = status,
+        onUpgradeClick = { /* Navigate to paywall */ }
+    )
+}
+```
+
+## Complete Implementation Example
+
+<CodeGroup>
+
+```kotlin ViewModel.kt
+class SubscriptionViewModel(
+    private val getSubscriptionStatus: GetSubscriptionStatusUseCase,
+    private val restorePurchases: RestorePurchasesUseCase
+) : ViewModel() {
+    
+    val subscriptionStatus: StateFlow<SubscriptionStatus?> = 
+        getSubscriptionStatus()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = null
+            )
+    
+    fun refreshStatus() {
+        viewModelScope.launch {
+            getSubscriptionStatus.getCurrentStatus()
+        }
+    }
+    
+    fun restorePurchases() {
+        viewModelScope.launch {
+            restorePurchases()
+                .onSuccess { status ->
+                    // Show success message
+                }
+                .onFailure { error ->
+                    // Show error
+                }
+        }
+    }
+}
+```
+
+```kotlin Screen.kt
+@Composable
+fun HomeScreen() {
+    val viewModel: SubscriptionViewModel = koinViewModel()
+    val status by viewModel.subscriptionStatus.collectAsState()
+    var showPaywall by remember { mutableStateOf(false) }
+    
+    Column {
+        // Show premium badge
+        if (status?.tier == SubscriptionTier.PREMIUM) {
+            PremiumBadge()
+        }
+        
+        // Show rolls remaining for free users
+        if (status?.tier == SubscriptionTier.FREE) {
+            RollsCounter(remaining = status?.dailyRollsRemaining ?: 0)
+        }
+        
+        // Feature that requires premium
+        Button(
+            onClick = {
+                if (status?.tier == SubscriptionTier.PREMIUM) {
+                    // Access premium feature
+                } else {
+                    // Show paywall
+                    showPaywall = true
+                }
+            }
+        ) {
+            Text("Premium Feature")
+        }
+    }
+    
+    if (showPaywall) {
+        PaywallScreen(
+            onDismiss = { showPaywall = false }
+        )
+    }
+}
+```
+
+</CodeGroup>
+
+## Restore Purchases
+
+Allow users to restore previous purchases:
+
+```kotlin
+class RestorePurchasesUseCase(
+    private val subscriptionRepository: SubscriptionRepository
+) {
+    suspend operator fun invoke(): Result<SubscriptionStatus> {
+        return subscriptionRepository.restorePurchases()
+    }
+}
+```
+
+**UI Implementation:**
+
+```kotlin
+@Composable
+fun SettingsScreen() {
+    val viewModel: SubscriptionViewModel = koinViewModel()
+    var isRestoring by remember { mutableStateOf(false) }
+    
+    TextButton(
+        onClick = {
+            isRestoring = true
+            viewModel.restorePurchases()
+        },
+        enabled = !isRestoring
+    ) {
+        if (isRestoring) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp))
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Text("Restore Purchases")
+    }
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Require Authentication">
+    Always require authentication before showing the paywall:
+
+    ```kotlin
+    val isAnonymous = authUiState.user?.isAnonymous ?: true
+    if (isAnonymous) {
+        // Show login prompt first
+        showLoginDialog = true
+    } else {
+        // Show paywall
+        showPaywall = true
+    }
+    ```
+  </Step>
+
+  <Step title="Observe Status Reactively">
+    Use StateFlow to react to subscription changes:
+
+    ```kotlin
+    viewModelScope.launch {
+        subscriptionRepository.getSubscriptionStatus().collect { status ->
+            if (status.tier == SubscriptionTier.PREMIUM) {
+                // Show confetti animation
+                showCelebration()
+            }
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Handle Purchase Callbacks">
+    Always refresh status after purchases:
+
+    ```kotlin
+    listener = object : PaywallListener {
+        override fun onPurchaseCompleted(
+            customerInfo: CustomerInfo,
+            storeTransaction: StoreTransaction
+        ) {
+            viewModel.refreshStatus()
+            // Show success feedback
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Never hardcode entitlement checks. Always use the `CheckEntitlementUseCase` to ensure server-side validation.
+</Warning>
+
+## Next Steps
+
+- Learn about [Authentication](/guides/authentication) to link subscriptions to users
+- Explore [Icebreaker Generation](/guides/icebreaker-generation) to implement premium features
+- Check out [UI Components](/guides/ui-components) for subscription card components

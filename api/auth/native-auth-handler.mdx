@@ -1,0 +1,312 @@
+---
+title: NativeAuthHandler
+description: Interface for platform-specific authentication flows in DadoMatch Shared SDK
+---
+
+## Overview
+
+`NativeAuthHandler` is an interface that must be implemented on each platform (Android, iOS) to handle native authentication flows. It abstracts the platform-specific details of Google and Apple Sign-In, allowing the shared code to trigger authentication without knowing the platform details.
+
+**Location:** `com.dadomatch.shared.feature.auth.presentation.NativeAuthHandler`
+
+**Implementation:** Platform-specific (Android/iOS)
+
+## Methods
+
+### signInWithGoogle
+
+<ParamField path="signInWithGoogle" type="suspend fun">
+  Triggers the native Google Sign-In flow on the current platform.
+  
+  ```kotlin
+  suspend fun signInWithGoogle(): Result<GoogleTokens>
+  ```
+  
+  **Returns:** `Result<GoogleTokens>` - Success with tokens or failure with error
+  
+  **Platform behavior:**
+  
+  **Android:**
+  - Uses Google Sign-In SDK or Credential Manager
+  - Shows Google account picker
+  - Returns ID token and optionally access token
+  
+  **iOS:**
+  - Uses Google Sign-In SDK
+  - Shows native Google authentication UI
+  - Returns both ID token and access token (required by Firebase iOS)
+  
+  **Common failures:**
+  - User cancellation
+  - No Google account configured on device
+  - Network errors
+  - Missing or invalid OAuth client configuration
+</ParamField>
+
+### signInWithApple
+
+<ParamField path="signInWithApple" type="suspend fun">
+  Triggers the native Apple Sign-In flow on the current platform.
+  
+  ```kotlin
+  suspend fun signInWithApple(): Result<AuthTokens>
+  ```
+  
+  **Returns:** `Result<AuthTokens>` - Success with tokens or failure with error
+  
+  **Platform behavior:**
+  
+  **iOS:**
+  - Uses AuthenticationServices framework
+  - Shows native Apple ID authentication UI
+  - Returns ID token and nonce
+  - Respects user's privacy settings (hide email option)
+  
+  **Android:**
+  - May use web-based OAuth flow
+  - Shows web view for Apple authentication
+  - Returns ID token (nonce may be null)
+  
+  **Web:**
+  - Uses web-based OAuth flow
+  - May return empty ID token (see [AuthRepository](/api/auth/auth-repository) for details)
+  
+  **Common failures:**
+  - User cancellation
+  - No Apple ID configured (iOS)
+  - Network errors
+  - Missing Apple Sign-In capability
+</ParamField>
+
+## Data Models
+
+### GoogleTokens
+
+```kotlin
+data class GoogleTokens(
+    val idToken: String,
+    val accessToken: String? = null
+)
+```
+
+Tokens returned by the native Google Sign-In flow.
+
+<ResponseField name="idToken" type="String" required>
+  The Google ID token (JWT) containing user information.
+  
+  This token is used to authenticate with Firebase.
+</ResponseField>
+
+<ResponseField name="accessToken" type="String?">
+  The Google access token for API access.
+  
+  **Platform requirements:**
+  - **iOS**: Required by Firebase iOS SDK (`FIRGoogleAuthProvider`)
+  - **Android**: Optional (Firebase Android SDK accepts ID token only)
+  
+  Your iOS implementation MUST provide this token.
+</ResponseField>
+
+### AuthTokens
+
+```kotlin
+data class AuthTokens(
+    val idToken: String,
+    val nonce: String? = null
+)
+```
+
+Tokens returned by the native Apple Sign-In flow.
+
+<ResponseField name="idToken" type="String" required>
+  The Apple ID token (JWT) containing user information.
+  
+  May be empty string for web flows (see [AuthRepository](/api/auth/auth-repository)).
+</ResponseField>
+
+<ResponseField name="nonce" type="String?">
+  The nonce used during authentication for security.
+  
+  Optional but recommended for security. Should be generated before starting the sign-in flow and verified after.
+</ResponseField>
+
+## Implementation Guide
+
+### Android Implementation Example
+
+```kotlin
+class AndroidAuthHandler(
+    private val activity: ComponentActivity
+) : NativeAuthHandler {
+    
+    override suspend fun signInWithGoogle(): Result<GoogleTokens> = 
+        suspendCancellableCoroutine { continuation ->
+            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(activity.getString(R.string.default_web_client_id))
+                .requestEmail()
+                .build()
+            
+            val client = GoogleSignIn.getClient(activity, gso)
+            val signInIntent = client.signInIntent
+            
+            val launcher = activity.registerForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                try {
+                    val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                    val account = task.getResult(ApiException::class.java)
+                    val idToken = account?.idToken
+                    
+                    if (idToken != null) {
+                        continuation.resume(
+                            Result.success(GoogleTokens(idToken, null))
+                        )
+                    } else {
+                        continuation.resume(
+                            Result.failure(Exception("No ID token returned"))
+                        )
+                    }
+                } catch (e: Exception) {
+                    continuation.resume(Result.failure(e))
+                }
+            }
+            
+            launcher.launch(signInIntent)
+        }
+    
+    override suspend fun signInWithApple(): Result<AuthTokens> {
+        // Android Apple Sign-In implementation
+        // Typically uses web-based OAuth flow
+        return Result.failure(Exception("Apple Sign-In not implemented on Android"))
+    }
+}
+```
+
+### iOS Implementation Example (Swift)
+
+```swift
+import GoogleSignIn
+import AuthenticationServices
+
+class IOSAuthHandler: NativeAuthHandler {
+    
+    func signInWithGoogle() async -> Result<GoogleTokens, Error> {
+        guard let clientID = FirebaseApp.app()?.options.clientID else {
+            return .failure(NSError(domain: "Auth", code: -1))
+        }
+        
+        let config = GIDConfiguration(clientID: clientID)
+        GIDSignIn.sharedInstance.configuration = config
+        
+        do {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let rootViewController = windowScene.windows.first?.rootViewController else {
+                return .failure(NSError(domain: "Auth", code: -1))
+            }
+            
+            let result = try await GIDSignIn.sharedInstance.signIn(
+                withPresenting: rootViewController
+            )
+            
+            guard let idToken = result.user.idToken?.tokenString,
+                  let accessToken = result.user.accessToken.tokenString else {
+                return .failure(NSError(domain: "Auth", code: -1))
+            }
+            
+            return .success(GoogleTokens(
+                idToken: idToken,
+                accessToken: accessToken  // Required on iOS!
+            ))
+        } catch {
+            return .failure(error)
+        }
+    }
+    
+    func signInWithApple() async -> Result<AuthTokens, Error> {
+        // Use ASAuthorizationController for native Apple Sign-In
+        // Implementation omitted for brevity
+    }
+}
+```
+
+## Dependency Injection
+
+The `NativeAuthHandler` should be provided to the `AuthViewModel` through dependency injection:
+
+```kotlin
+// Android
+val androidAuthHandler = AndroidAuthHandler(activity)
+val authViewModel = AuthViewModel(
+    authRepository = authRepository,
+    subscriptionRepository = subscriptionRepository,
+    nativeAuthHandler = androidAuthHandler
+)
+
+// iOS (via Koin or similar)
+module {
+    single<NativeAuthHandler> { IOSAuthHandler() }
+    viewModel { AuthViewModel(get(), get(), get()) }
+}
+```
+
+## Error Handling
+
+Implementations should return `Result.failure()` with meaningful error messages for:
+
+- **User cancellation**: "User cancelled authentication"
+- **Configuration errors**: "Google/Apple Sign-In not configured"
+- **Network errors**: Include the underlying error message
+- **Platform errors**: Wrap platform-specific errors with context
+
+**Example:**
+
+```kotlin
+catch (e: ApiException) {
+    when (e.statusCode) {
+        CommonStatusCodes.CANCELED -> 
+            Result.failure(Exception("User cancelled sign-in"))
+        CommonStatusCodes.NETWORK_ERROR -> 
+            Result.failure(Exception("Network error: ${e.message}"))
+        else -> 
+            Result.failure(Exception("Sign-in failed: ${e.message}"))
+    }
+}
+```
+
+## Testing
+
+Create a mock implementation for testing:
+
+```kotlin
+class MockNativeAuthHandler : NativeAuthHandler {
+    var googleResult: Result<GoogleTokens>? = null
+    var appleResult: Result<AuthTokens>? = null
+    
+    override suspend fun signInWithGoogle(): Result<GoogleTokens> {
+        return googleResult ?: Result.success(
+            GoogleTokens("mock-id-token", "mock-access-token")
+        )
+    }
+    
+    override suspend fun signInWithApple(): Result<AuthTokens> {
+        return appleResult ?: Result.success(
+            AuthTokens("mock-id-token", "mock-nonce")
+        )
+    }
+}
+```
+
+## Security Considerations
+
+1. **Token validation**: All tokens are validated by Firebase Authentication on the backend
+2. **Nonce verification**: Use nonces for Apple Sign-In to prevent replay attacks
+3. **HTTPS only**: All authentication flows should use HTTPS
+4. **Don't log tokens**: Never log ID tokens or access tokens
+5. **Token storage**: Let Firebase handle token storage and refresh
+
+## Related
+
+- [AuthViewModel](/api/auth/auth-viewmodel) - Uses this interface to trigger authentication
+- [AuthRepository](/api/auth/auth-repository) - Consumes the tokens from this interface
+- [GoogleTokens](#googletokens) - Data model for Google Sign-In results
+- [AuthTokens](#authtokens) - Data model for Apple Sign-In results

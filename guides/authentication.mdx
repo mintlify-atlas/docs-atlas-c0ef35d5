@@ -1,0 +1,406 @@
+---
+title: 'Authentication'
+description: 'Learn how to implement authentication in your app using the DadoMatch Shared SDK'
+icon: 'shield-check'
+---
+
+The DadoMatch Shared SDK provides a complete authentication system with support for Google Sign-In, Apple Sign-In, and anonymous authentication. The authentication layer integrates seamlessly with Firebase and your subscription system.
+
+## Architecture Overview
+
+The authentication system follows clean architecture principles:
+
+- **AuthRepository**: Domain interface for authentication operations
+- **AuthViewModel**: Manages UI state and authentication flows
+- **NativeAuthHandler**: Platform-specific authentication handlers
+- **AuthBottomSheet**: Ready-to-use authentication UI component
+
+## Quick Start
+
+<Steps>
+  <Step title="Inject Dependencies">
+    The SDK automatically provides authentication dependencies through Koin:
+
+    ```kotlin
+    @Composable
+    fun MyScreen() {
+        val authViewModel: AuthViewModel = koinViewModel()
+        val uiState by authViewModel.uiState.collectAsState()
+    }
+    ```
+  </Step>
+
+  <Step title="Display Authentication UI">
+    Use the pre-built `AuthBottomSheet` component:
+
+    ```kotlin
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun MyScreen() {
+        val authViewModel: AuthViewModel = koinViewModel()
+        val authUiState by authViewModel.uiState.collectAsState()
+        var showAuth by remember { mutableStateOf(false) }
+
+        // Show auth when needed
+        if (showAuth) {
+            ModalBottomSheet(
+                onDismissRequest = { 
+                    if (!authUiState.isLoading) showAuth = false 
+                },
+                containerColor = Color.Transparent,
+                scrimColor = Color.Black.copy(alpha = 0.5f)
+            ) {
+                AuthBottomSheet(
+                    viewModel = authViewModel,
+                    onDismiss = { showAuth = false }
+                )
+            }
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Monitor Authentication State">
+    The authentication state is automatically managed:
+
+    ```kotlin
+    val uiState by authViewModel.uiState.collectAsState()
+
+    when {
+        uiState.isLoading -> {
+            // Show loading indicator
+        }
+        uiState.user != null -> {
+            // User is authenticated
+            val user = uiState.user
+            Text("Welcome ${user.displayName}")
+        }
+        uiState.error != null -> {
+            // Show error message
+            Text(uiState.error)
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Authentication Methods
+
+### Google Sign-In
+
+The SDK provides native Google Sign-In integration:
+
+```kotlin
+// Trigger Google Sign-In flow
+authViewModel.triggerGoogleSignIn()
+```
+
+<Note>
+  Google Sign-In uses platform-specific implementations through `NativeAuthHandler`. The iOS implementation requires an access token, while Android can work with just the ID token.
+</Note>
+
+**Implementation Details:**
+
+From `AuthViewModel.kt:33-44`:
+
+```kotlin
+fun triggerGoogleSignIn() {
+    _uiState.update { it.copy(isLoading = true, error = null) }
+    viewModelScope.launch {
+        nativeAuthHandler.signInWithGoogle()
+            .onSuccess { tokens ->
+                signInWithGoogle(tokens.idToken, tokens.accessToken)
+            }
+            .onFailure { error ->
+                _uiState.update { it.copy(isLoading = false, error = error.message) }
+            }
+    }
+}
+```
+
+### Apple Sign-In
+
+For iOS apps, Apple Sign-In is also available:
+
+```kotlin
+// Trigger Apple Sign-In flow
+authViewModel.triggerAppleSignIn()
+```
+
+**Implementation Details:**
+
+From `AuthViewModel.kt:46-57`:
+
+```kotlin
+fun triggerAppleSignIn() {
+    _uiState.update { it.copy(isLoading = true, error = null) }
+    viewModelScope.launch {
+        nativeAuthHandler.signInWithApple()
+            .onSuccess { tokens ->
+                signInWithApple(tokens.idToken, tokens.nonce)
+            }
+            .onFailure { error ->
+                _uiState.update { it.copy(isLoading = false, error = error.message) }
+            }
+    }
+}
+```
+
+### Anonymous Authentication
+
+For quick onboarding without requiring sign-in:
+
+```kotlin
+// Sign in anonymously
+authViewModel.signInAnonymously()
+```
+
+**Implementation:**
+
+```kotlin
+fun signInAnonymously() {
+    _uiState.update { it.copy(isLoading = true, error = null) }
+    viewModelScope.launch {
+        authRepository.signInAnonymously()
+            .onSuccess { user ->
+                _uiState.update { it.copy(isLoading = false, user = user) }
+            }
+            .onFailure { error ->
+                _uiState.update { it.copy(isLoading = false, error = error.message) }
+            }
+    }
+}
+```
+
+## Working with AuthRepository
+
+For advanced use cases, you can inject `AuthRepository` directly:
+
+```kotlin
+class MyUseCase(private val authRepository: AuthRepository) {
+    
+    // Observe current user
+    fun observeUser(): Flow<AuthUser?> {
+        return authRepository.currentUser
+    }
+    
+    // Sign in with Google
+    suspend fun signIn(idToken: String, accessToken: String?) {
+        authRepository.signInWithGoogle(idToken, accessToken)
+            .onSuccess { user ->
+                println("Signed in as ${user.email}")
+            }
+            .onFailure { error ->
+                println("Sign in failed: ${error.message}")
+            }
+    }
+    
+    // Sign out
+    suspend fun signOut() {
+        authRepository.signOut()
+    }
+}
+```
+
+**Repository Interface:**
+
+From `AuthRepository.kt:5-11`:
+
+```kotlin
+interface AuthRepository {
+    val currentUser: Flow<AuthUser?>
+    suspend fun signInWithGoogle(idToken: String, accessToken: String? = null): Result<AuthUser>
+    suspend fun signInWithApple(idToken: String, nonce: String? = null): Result<AuthUser>
+    suspend fun signInAnonymously(): Result<AuthUser>
+    suspend fun signOut()
+}
+```
+
+## Authentication State
+
+The `AuthUiState` data class provides all authentication state:
+
+```kotlin
+data class AuthUiState(
+    val isLoading: Boolean = false,
+    val user: AuthUser? = null,
+    val error: String? = null
+)
+```
+
+**AuthUser Model:**
+
+```kotlin
+data class AuthUser(
+    val id: String,
+    val email: String?,
+    val displayName: String?,
+    val isAnonymous: Boolean
+)
+```
+
+## Integration with Subscriptions
+
+The authentication system automatically links users with the subscription system:
+
+```kotlin
+private fun signInWithGoogle(idToken: String, accessToken: String? = null) {
+    viewModelScope.launch {
+        authRepository.signInWithGoogle(idToken, accessToken)
+            .onSuccess { user ->
+                // Automatically link subscription data
+                subscriptionRepository.logIn(user.id)
+                _uiState.update { it.copy(isLoading = false, user = user) }
+            }
+    }
+}
+```
+
+<Warning>
+  Always call `subscriptionRepository.logIn(userId)` after successful authentication to ensure subscription data is properly linked.
+</Warning>
+
+## Custom UI Implementation
+
+While `AuthBottomSheet` provides a ready-to-use UI, you can build custom authentication interfaces:
+
+```kotlin
+@Composable
+fun CustomAuthScreen() {
+    val authViewModel: AuthViewModel = koinViewModel()
+    val uiState by authViewModel.uiState.collectAsState()
+    
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Custom title and description
+        Text("Welcome to DadoMatch")
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // Google Sign-In Button
+        Button(
+            onClick = { authViewModel.triggerGoogleSignIn() },
+            enabled = !uiState.isLoading
+        ) {
+            if (uiState.isLoading) {
+                CircularProgressIndicator()
+            } else {
+                Text("Sign in with Google")
+            }
+        }
+        
+        // Error handling
+        uiState.error?.let { error ->
+            Text(
+                text = error,
+                color = Color.Red,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+            Button(
+                onClick = { authViewModel.dismissError() },
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                Text("Dismiss")
+            }
+        }
+    }
+}
+```
+
+## Platform-Specific Implementation
+
+To implement platform-specific authentication handlers, create an implementation of `NativeAuthHandler`:
+
+```kotlin
+// Android implementation example
+class AndroidAuthHandler : NativeAuthHandler {
+    override suspend fun signInWithGoogle(): Result<GoogleTokens> {
+        // Implement Google Sign-In for Android
+        return try {
+            val account = googleSignInClient.silentSignIn().await()
+            val idToken = account.idToken ?: throw Exception("No ID token")
+            Result.success(GoogleTokens(idToken = idToken))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    override suspend fun signInWithApple(): Result<AuthTokens> {
+        // Apple Sign-In is iOS only
+        return Result.failure(Exception("Not supported on Android"))
+    }
+}
+```
+
+## Error Handling
+
+The SDK provides comprehensive error handling:
+
+```kotlin
+val uiState by authViewModel.uiState.collectAsState()
+
+uiState.error?.let { errorMessage ->
+    // Display error to user
+    AlertDialog(
+        onDismissRequest = { authViewModel.dismissError() },
+        title = { Text("Authentication Error") },
+        text = { Text(errorMessage) },
+        confirmButton = {
+            TextButton(onClick = { authViewModel.dismissError() }) {
+                Text("OK")
+            }
+        }
+    )
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Prevent Dismissal During Loading">
+    Always prevent bottom sheet dismissal while authentication is in progress:
+
+    ```kotlin
+    val sheetState = rememberModalBottomSheetState(
+        confirmValueChange = { targetValue ->
+            if (authUiState.isLoading && targetValue == SheetValue.Hidden) false
+            else true
+        }
+    )
+    ```
+  </Step>
+
+  <Step title="Check Anonymous Status">
+    Before requiring authentication, check if the user is anonymous:
+
+    ```kotlin
+    val isAnonymous = authUiState.user?.isAnonymous ?: true
+    if (isAnonymous) {
+        // Show sign-in prompt
+    }
+    ```
+  </Step>
+
+  <Step title="Auto-Dismiss on Success">
+    The `AuthBottomSheet` automatically dismisses on successful authentication:
+
+    ```kotlin
+    // From AuthBottomSheet.kt:166-171
+    LaunchedEffect(uiState.user) {
+        if (uiState.user != null) {
+            kotlinx.coroutines.delay(800) // Show success briefly
+            onDismiss()
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+- Learn about [Subscription Management](/guides/subscription-management) to integrate premium features
+- Explore [UI Components](/guides/ui-components) for more ready-to-use components
+- Check out [Icebreaker Generation](/guides/icebreaker-generation) for core features

@@ -1,0 +1,341 @@
+---
+title: 'Resource'
+description: 'Sealed class for handling asynchronous operation results in DadoMatch Shared SDK'
+---
+
+## Overview
+
+The `Resource` sealed class is a type-safe wrapper for representing the result of asynchronous operations. It provides three states: `Success`, `Error`, and `Loading`, making it easy to handle different outcomes in a consistent way across the SDK.
+
+## Class Definition
+
+```kotlin
+sealed class Resource<out T>
+```
+
+<ParamField path="T" type="Type Parameter">
+  The type of data contained in a successful result. Uses covariant `out` modifier to allow type-safe casting.
+</ParamField>
+
+## States
+
+### Success
+
+Represents a successful operation with data.
+
+```kotlin
+data class Success<out T>(val data: T) : Resource<T>()
+```
+
+<ParamField path="data" type="T" required>
+  The successful result data of type `T`.
+</ParamField>
+
+#### Usage
+
+```kotlin
+val result: Resource<User> = Resource.Success(user)
+when (result) {
+    is Resource.Success -> println("User: ${result.data}")
+    else -> {}
+}
+```
+
+### Error
+
+Represents a failed operation with error information.
+
+```kotlin
+data class Error(val message: String, val throwable: Throwable? = null) : Resource<Nothing>()
+```
+
+<ParamField path="message" type="String" required>
+  A human-readable error message describing what went wrong.
+</ParamField>
+
+<ParamField path="throwable" type="Throwable?" default="null">
+  Optional exception or throwable that caused the error. Useful for detailed error logging and debugging.
+</ParamField>
+
+#### Usage
+
+```kotlin
+val result: Resource<User> = Resource.Error(
+    message = "Failed to load user",
+    throwable = IOException("Network timeout")
+)
+when (result) {
+    is Resource.Error -> {
+        println("Error: ${result.message}")
+        result.throwable?.printStackTrace()
+    }
+    else -> {}
+}
+```
+
+### Loading
+
+Represents an ongoing operation that hasn't completed yet.
+
+```kotlin
+object Loading : Resource<Nothing>()
+```
+
+This is a singleton object with no additional properties. Use it to indicate that an operation is in progress.
+
+#### Usage
+
+```kotlin
+val result: Resource<User> = Resource.Loading
+when (result) {
+    is Resource.Loading -> showLoadingSpinner()
+    else -> hideLoadingSpinner()
+}
+```
+
+## Complete Usage Examples
+
+<CodeGroup>
+
+```kotlin Flow Usage
+import com.dadomatch.shared.core.util.Resource
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+
+fun fetchUser(userId: String): Flow<Resource<User>> = flow {
+    emit(Resource.Loading)
+    try {
+        val user = userRepository.getUser(userId)
+        emit(Resource.Success(user))
+    } catch (e: Exception) {
+        emit(Resource.Error(
+            message = "Failed to fetch user",
+            throwable = e
+        ))
+    }
+}
+```
+
+```kotlin UI State Management
+import com.dadomatch.shared.core.util.Resource
+
+class UserViewModel {
+    val userState: Flow<Resource<User>> = fetchUser("123")
+    
+    fun observeUser() {
+        userState.collect { resource ->
+            when (resource) {
+                is Resource.Loading -> {
+                    showLoading()
+                }
+                is Resource.Success -> {
+                    hideLoading()
+                    displayUser(resource.data)
+                }
+                is Resource.Error -> {
+                    hideLoading()
+                    showError(resource.message)
+                    logError(resource.throwable)
+                }
+            }
+        }
+    }
+}
+```
+
+```kotlin Repository Pattern
+import com.dadomatch.shared.core.util.Resource
+
+class UserRepository {
+    suspend fun loadUser(id: String): Resource<User> {
+        return try {
+            val user = apiClient.getUser(id)
+            Resource.Success(user)
+        } catch (e: NetworkException) {
+            Resource.Error(
+                message = "Network error: ${e.message}",
+                throwable = e
+            )
+        } catch (e: Exception) {
+            Resource.Error(
+                message = "Unexpected error occurred",
+                throwable = e
+            )
+        }
+    }
+}
+```
+
+```kotlin Mapping Results
+import com.dadomatch.shared.core.util.Resource
+
+fun <T, R> Resource<T>.map(transform: (T) -> R): Resource<R> {
+    return when (this) {
+        is Resource.Success -> Resource.Success(transform(data))
+        is Resource.Error -> Resource.Error(message, throwable)
+        is Resource.Loading -> Resource.Loading
+    }
+}
+
+// Usage
+val userResource: Resource<User> = Resource.Success(user)
+val nameResource: Resource<String> = userResource.map { it.name }
+```
+
+```kotlin Composable UI (Android)
+import androidx.compose.runtime.Composable
+import com.dadomatch.shared.core.util.Resource
+
+@Composable
+fun UserScreen(userResource: Resource<User>) {
+    when (userResource) {
+        is Resource.Loading -> {
+            CircularProgressIndicator()
+        }
+        is Resource.Success -> {
+            UserProfile(user = userResource.data)
+        }
+        is Resource.Error -> {
+            ErrorView(
+                message = userResource.message,
+                onRetry = { /* retry logic */ }
+            )
+        }
+    }
+}
+```
+
+```kotlin SwiftUI Integration (iOS)
+import Shared
+import SwiftUI
+
+struct UserView: View {
+    let resource: Resource<User>
+    
+    var body: some View {
+        switch resource {
+        case is ResourceLoading:
+            ProgressView()
+        case let success as ResourceSuccess<User>:
+            UserProfileView(user: success.data)
+        case let error as ResourceError:
+            ErrorView(message: error.message)
+        default:
+            EmptyView()
+        }
+    }
+}
+```
+
+</CodeGroup>
+
+## Pattern Matching
+
+The sealed class design enables exhaustive pattern matching with Kotlin's `when` expression:
+
+```kotlin
+fun handleResource(resource: Resource<User>) {
+    when (resource) {
+        is Resource.Success -> handleSuccess(resource.data)
+        is Resource.Error -> handleError(resource.message, resource.throwable)
+        is Resource.Loading -> showLoading()
+        // No else needed - compiler ensures all cases are covered
+    }
+}
+```
+
+## Type Safety
+
+<Info>
+  The `out` variance modifier on type parameter `T` allows safe covariant usage. This means `Resource<Dog>` is a subtype of `Resource<Animal>` when `Dog` is a subtype of `Animal`.
+</Info>
+
+<Expandable title="Variance Example">
+
+```kotlin
+open class Animal
+class Dog : Animal()
+
+val dogResource: Resource<Dog> = Resource.Success(Dog())
+val animalResource: Resource<Animal> = dogResource // Valid due to covariance
+```
+
+</Expandable>
+
+## Error Handling Best Practices
+
+<Warning>
+  Always provide meaningful error messages in `Resource.Error`. Include the optional `throwable` parameter for debugging purposes, but don't rely on it for user-facing error messages.
+</Warning>
+
+### Good Error Handling
+
+```kotlin
+try {
+    val data = fetchData()
+    Resource.Success(data)
+} catch (e: NetworkException) {
+    Resource.Error(
+        message = "Unable to connect to server. Please check your internet connection.",
+        throwable = e
+    )
+} catch (e: AuthException) {
+    Resource.Error(
+        message = "Session expired. Please log in again.",
+        throwable = e
+    )
+}
+```
+
+### Poor Error Handling
+
+```kotlin
+try {
+    val data = fetchData()
+    Resource.Success(data)
+} catch (e: Exception) {
+    Resource.Error(e.toString()) // Don't expose raw exception messages to users
+}
+```
+
+## Extension Functions
+
+Common extension functions you can add to your codebase:
+
+```kotlin
+// Get data or null
+fun <T> Resource<T>.dataOrNull(): T? = when (this) {
+    is Resource.Success -> data
+    else -> null
+}
+
+// Get data or default value
+fun <T> Resource<T>.dataOrDefault(default: T): T = when (this) {
+    is Resource.Success -> data
+    else -> default
+}
+
+// Check if loading
+fun <T> Resource<T>.isLoading(): Boolean = this is Resource.Loading
+
+// Check if success
+fun <T> Resource<T>.isSuccess(): Boolean = this is Resource.Success
+
+// Check if error
+fun <T> Resource<T>.isError(): Boolean = this is Resource.Error
+```
+
+## Related APIs
+
+- [KoinInitializer](/api/core/koin-initializer) - Initialize dependency injection
+- [EnvironmentConfig](/api/core/environment-config) - Access configuration values
+
+## Package
+
+```kotlin
+package com.dadomatch.shared.core.util
+```
+
+## Source Location
+
+`shared/src/commonMain/kotlin/com/dadomatch/shared/core/util/Resource.kt`

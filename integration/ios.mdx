@@ -1,0 +1,606 @@
+---
+title: "iOS Integration"
+description: "Integrate DadoMatch Shared SDK into your iOS application"
+---
+
+## Overview
+
+The DadoMatch Shared SDK provides a native iOS framework through Swift Package Manager, containing shared business logic, UI components, and utilities built with Kotlin Multiplatform and Compose Multiplatform.
+
+## Requirements
+
+- **iOS**: 16.0+
+- **Xcode**: 15.0+
+- **Swift**: 5.9+
+- **Platform**: iOS devices and simulators (x64, ARM64, Simulator ARM64)
+
+## Integration Methods
+
+<Tabs>
+  <Tab title="Local Development">
+    ### Local Development Integration
+
+    Integrate the SDK locally for active development and testing. This method allows you to modify the SDK source code and see changes immediately.
+
+    <Steps>
+      <Step title="Clone the SDK Repository">
+        Clone the DadoMatch Shared SDK repository:
+
+        ```bash
+        git clone https://github.com/felipechaux/dado-match-shared
+        cd dado-match-shared
+        ```
+      </Step>
+
+      <Step title="Verify Package.swift">
+        Ensure `Package.swift` exists in the repository root:
+
+        ```swift Package.swift
+        // swift-tools-version: 5.9
+        import PackageDescription
+
+        let package = Package(
+            name: "DadoMatchShared",
+            platforms: [
+                .iOS(.v16)
+            ],
+            products: [
+                .library(
+                    name: "DadoMatchShared",
+                    targets: ["DadoMatchSharedWrapper"]
+                ),
+            ],
+            dependencies: [
+                .package(url: "https://github.com/RevenueCat/purchases-hybrid-common.git", exact: "17.32.0"),
+            ],
+            targets: [
+                .binaryTarget(
+                    name: "DadoMatchSharedBinary",
+                    // Local path for development
+                    path: "./shared/build/XCFrameworks/release/DadoMatchShared.xcframework"
+                ),
+                .target(
+                    name: "DadoMatchSharedWrapper",
+                    dependencies: [
+                        "DadoMatchSharedBinary",
+                        .product(name: "PurchasesHybridCommon", package: "purchases-hybrid-common"),
+                        .product(name: "PurchasesHybridCommonUI", package: "purchases-hybrid-common"),
+                    ]
+                )
+            ]
+        )
+        ```
+
+        <Note>
+          For local development, you may need to temporarily change the `binaryTarget` from a URL to a local path.
+        </Note>
+      </Step>
+
+      <Step title="Build the XCFramework">
+        Build the Release XCFramework:
+
+        ```bash
+        # Navigate to SDK directory
+        cd dado-match-shared
+
+        # Build Release XCFramework
+        ./gradlew shared:assembleDadoMatchSharedReleaseXCFramework
+        ```
+
+        The framework will be generated at:
+        ```
+        shared/build/XCFrameworks/release/DadoMatchShared.xcframework
+        ```
+
+        <Tip>
+          For faster development builds, use the Debug variant:
+          ```bash
+          ./gradlew shared:assembleDadoMatchSharedDebugXCFramework
+          ```
+        </Tip>
+      </Step>
+
+      <Step title="Add Package to Xcode">
+        Add the local package to your Xcode project:
+
+        1. Open your iOS project in Xcode
+        2. Go to **File → Add Package Dependencies**
+        3. Click **Add Local...**
+        4. Navigate to and select the `dado-match-shared` repository folder
+        5. Click **Add Package**
+        6. Select target **DadoMatchShared**
+        7. Click **Add Package**
+      </Step>
+
+      <Step title="Build Your Project">
+        Build your project to verify the integration:
+
+        ```
+        Product → Build (⌘+B)
+        ```
+      </Step>
+    </Steps>
+
+    <Warning>
+      When using local packages, you must rebuild the XCFramework after any Kotlin code changes:
+      ```bash
+      ./gradlew shared:assembleDadoMatchSharedReleaseXCFramework
+      ```
+    </Warning>
+  </Tab>
+
+  <Tab title="Remote Package">
+    ### Remote Package Integration (Recommended for Production)
+
+    Integrate the SDK from GitHub for production builds. This method automatically downloads the prebuilt XCFramework.
+
+    <Steps>
+      <Step title="Configure GitHub Authentication">
+        Create or update your `~/.netrc` file with GitHub credentials:
+
+        ```bash ~/.netrc
+        machine api.github.com
+          login your-github-username
+          password your-github-token
+        machine github.com
+          login your-github-username
+          password your-github-token
+        ```
+
+        <Note>
+          The token must have `repo` scope to access the repository and download releases.
+        </Note>
+      </Step>
+
+      <Step title="Add Package via Xcode">
+        Add the package to your Xcode project:
+
+        1. Open your iOS project in Xcode
+        2. Go to **File → Add Package Dependencies**
+        3. Enter the repository URL:
+           ```
+           https://github.com/felipechaux/dado-match-shared
+           ```
+        4. Select **Branch** and choose **main**
+        5. Click **Add Package**
+        6. After verification, select target **DadoMatchShared**
+        7. Click **Add Package**
+      </Step>
+
+      <Step title="Build Your Project">
+        Build your project to download and link the framework:
+
+        ```
+        Product → Build (⌘+B)
+        ```
+      </Step>
+    </Steps>
+
+    <Tip>
+      For version pinning, specify a semantic version instead of using the main branch:
+      ```swift
+      .package(url: "https://github.com/felipechaux/dado-match-shared", from: "1.0.0")
+      ```
+    </Tip>
+  </Tab>
+
+  <Tab title="Programmatic Integration">
+    ### Swift Package Manager (Package.swift)
+
+    Add the SDK dependency directly to your `Package.swift`:
+
+    ```swift Package.swift
+    // swift-tools-version: 5.9
+    import PackageDescription
+
+    let package = Package(
+        name: "YourApp",
+        platforms: [
+            .iOS(.v16)
+        ],
+        products: [
+            .library(
+                name: "YourApp",
+                targets: ["YourApp"]
+            ),
+        ],
+        dependencies: [
+            .package(
+                url: "https://github.com/felipechaux/dado-match-shared",
+                from: "1.0.0"
+            )
+        ],
+        targets: [
+            .target(
+                name: "YourApp",
+                dependencies: [
+                    .product(name: "DadoMatchShared", package: "dado-match-shared")
+                ]
+            ),
+        ]
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Package Structure
+
+The SDK package consists of three targets:
+
+```swift
+DadoMatchShared
+├── DadoMatchSharedBinary (XCFramework)
+│   └── Kotlin Multiplatform compiled framework
+├── DadoMatchSharedWrapper (Swift wrapper)
+│   └── Swift interop layer
+└── Dependencies
+    ├── PurchasesHybridCommon (RevenueCat)
+    └── PurchasesHybridCommonUI (RevenueCat UI)
+```
+
+## Initialization
+
+### App Setup
+
+Initialize the SDK in your App's entry point to set up Koin, Firebase, and other core services.
+
+<Steps>
+  <Step title="Import the SDK">
+    Import DadoMatchShared in your main App file:
+
+    ```swift YourApp.swift
+    import SwiftUI
+    import DadoMatchShared
+
+    @main
+    struct YourApp: App {
+        init() {
+            // Initialize the SDK
+            KoinInitializerKt.initKoin()
+        }
+        
+        var body: some Scene {
+            WindowGroup {
+                ContentView()
+            }
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Configure Firebase">
+    Add your Firebase configuration file (`GoogleService-Info.plist`) to your Xcode project:
+
+    1. Download from Firebase Console
+    2. Drag into your Xcode project
+    3. Ensure it's added to your app target
+  </Step>
+
+  <Step title="Update Info.plist">
+    Add required keys to your `Info.plist`:
+
+    ```xml Info.plist
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <!-- Required for Firebase -->
+        <key>FirebaseAppDelegateProxyEnabled</key>
+        <false/>
+        
+        <!-- Other keys... -->
+    </dict>
+    </plist>
+    ```
+  </Step>
+</Steps>
+
+### What Initialization Does
+
+The `initKoin()` function performs critical setup:
+
+```kotlin KoinInitializer.kt
+fun initKoin(appDeclaration: KoinAppDeclaration = {}) {
+    if (KoinPlatformTools.defaultContext().getOrNull() == null) {
+        // 1. Start Koin dependency injection
+        startKoin {
+            appDeclaration()
+            modules(getAllModules())
+        }
+
+        // 2. Configure RevenueCat
+        val revenueCatService = koin.get<RevenueCatService>()
+        revenueCatService.configure(BuildKonfig.REVENUECAT_API_KEY)
+
+        // 3. Sync authenticated users with RevenueCat
+        CoroutineScope(Dispatchers.Default).launch {
+            val currentUser = Firebase.auth.currentUser
+            if (currentUser != null && !currentUser.isAnonymous) {
+                revenueCatService.logIn(currentUser.uid)
+            }
+        }
+    }
+}
+```
+
+<Note>
+  Firebase and Room database are automatically initialized by the SDK for iOS.
+</Note>
+
+## Using the SDK
+
+### Compose UI Integration
+
+The SDK provides a complete Compose UI that can be integrated using `UIViewControllerRepresentable`:
+
+```swift ContentView.swift
+import SwiftUI
+import DadoMatchShared
+
+struct ContentView: View {
+    var body: some View {
+        ComposeView()
+            .ignoresSafeArea()
+    }
+}
+
+struct ComposeView: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        // Use the SDK's main view controller
+        return MainViewControllerKt.MainViewController()
+    }
+    
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        // No updates needed
+    }
+}
+```
+
+### Accessing Kotlin Code from Swift
+
+The SDK's Kotlin code is accessible from Swift through the XCFramework:
+
+```swift ViewModel.swift
+import Foundation
+import DadoMatchShared
+import Combine
+
+class AuthViewModel: ObservableObject {
+    @Published var isAuthenticated = false
+    
+    func signIn() async {
+        // Access Koin to get repositories
+        let koin = KoinKt.koin()
+        
+        // Get the auth repository (example)
+        // Note: Direct repository access may require additional wrapper functions
+    }
+}
+```
+
+<Warning>
+  Some Kotlin patterns (like `suspend` functions and `Flow`) require special handling in Swift. Consider using the SDK's UI components directly or creating Swift-friendly wrapper functions.
+</Warning>
+
+### Using ViewController Directly
+
+For a simpler integration, present the SDK's UI as a full-screen modal:
+
+```swift RootView.swift
+import SwiftUI
+import DadoMatchShared
+
+struct RootView: View {
+    @State private var showDadoMatch = false
+    
+    var body: some View {
+        Button("Launch DadoMatch") {
+            showDadoMatch = true
+        }
+        .fullScreenCover(isPresented: $showDadoMatch) {
+            ComposeView()
+        }
+    }
+}
+```
+
+## Configuration
+
+### Build Configuration
+
+The SDK uses BuildKonfig to inject configuration at compile time. Environment variables are set during the XCFramework build process.
+
+### Runtime Configuration
+
+For runtime configuration, you can pass values through Koin modules:
+
+```swift AppConfiguration.swift
+import DadoMatchShared
+
+func configureSDK() {
+    // Initialize with custom configuration
+    KoinInitializerKt.initKoin { koinApplication in
+        // Add custom configuration here
+    }
+}
+```
+
+## Building From Source
+
+To build the iOS XCFramework manually:
+
+<Steps>
+  <Step title="Clone and Navigate">
+    ```bash
+    git clone https://github.com/felipechaux/dado-match-shared
+    cd dado-match-shared
+    ```
+  </Step>
+
+  <Step title="Build for Release">
+    Build the Release XCFramework:
+
+    ```bash
+    ./gradlew shared:assembleDadoMatchSharedReleaseXCFramework
+    ```
+
+    Output location:
+    ```
+    shared/build/XCFrameworks/release/DadoMatchShared.xcframework
+    ```
+  </Step>
+
+  <Step title="Build for Debug (Optional)">
+    For faster development iterations:
+
+    ```bash
+    ./gradlew shared:assembleDadoMatchSharedDebugXCFramework
+    ```
+
+    Output location:
+    ```
+    shared/build/XCFrameworks/debug/DadoMatchShared.xcframework
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  Building the XCFramework requires macOS with Xcode installed.
+</Note>
+
+## Release Management
+
+### Automated Releases
+
+The SDK uses GitHub Actions for automated releases. When a new version tag is pushed:
+
+```bash
+# Ensure main is up to date
+git checkout main && git pull
+
+# Create and push a version tag
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The workflow automatically:
+1. Builds the Release XCFramework
+2. Creates a GitHub Release
+3. Uploads `DadoMatchShared.xcframework.zip`
+4. Updates `Package.swift` with the new URL and checksum
+5. Commits changes back to `main`
+
+### Manual XCFramework Installation
+
+If you need to integrate a manually built XCFramework:
+
+<Steps>
+  <Step title="Build the Framework">
+    ```bash
+    ./gradlew shared:assembleDadoMatchSharedReleaseXCFramework
+    ```
+  </Step>
+
+  <Step title="Drag into Xcode">
+    1. Drag `DadoMatchShared.xcframework` into your Xcode project
+    2. Select your app target
+    3. Go to **General → Frameworks, Libraries, and Embedded Content**
+    4. Set the framework to **Embed & Sign**
+  </Step>
+
+  <Step title="Link RevenueCat Dependencies">
+    Add RevenueCat dependencies via SPM:
+    
+    ```
+    https://github.com/RevenueCat/purchases-hybrid-common
+    ```
+    
+    Version: `17.32.0`
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Build Errors
+
+<AccordionGroup>
+  <Accordion title="XCFramework not found">
+    **Error**: `Binary target 'DadoMatchSharedBinary' not found`
+    
+    **Solution**: Build the XCFramework first:
+    ```bash
+    ./gradlew shared:assembleDadoMatchSharedReleaseXCFramework
+    ```
+  </Accordion>
+
+  <Accordion title="Authentication failure (Remote)">
+    **Error**: `Authentication failed` when adding remote package
+    
+    **Solution**: Verify your `~/.netrc` file has correct credentials with `repo` scope.
+  </Accordion>
+
+  <Accordion title="Minimum iOS version error">
+    **Error**: `Package requires iOS 16.0 or later`
+    
+    **Solution**: Update your deployment target in Xcode:
+    ```
+    Target → General → Minimum Deployments → iOS 16.0
+    ```
+  </Accordion>
+
+  <Accordion title="Module not found">
+    **Error**: `No such module 'DadoMatchShared'`
+    
+    **Solution**: 
+    1. Clean build folder (⌘+Shift+K)
+    2. Clean DerivedData
+    3. Rebuild project (⌘+B)
+  </Accordion>
+</AccordionGroup>
+
+### Runtime Errors
+
+<AccordionGroup>
+  <Accordion title="Koin not initialized">
+    **Error**: `KoinApplication has not been started`
+    
+    **Solution**: Ensure `KoinInitializerKt.initKoin()` is called in your App's `init()`.
+  </Accordion>
+
+  <Accordion title="Firebase configuration missing">
+    **Error**: `Firebase not configured`
+    
+    **Solution**: Add `GoogleService-Info.plist` to your Xcode project and ensure it's included in your target.
+  </Accordion>
+
+  <Accordion title="Compose UI issues">
+    **Error**: UI not rendering or crashes in Compose
+    
+    **Solution**: Ensure you're using `ignoresSafeArea()` on the ComposeView and not interfering with the Compose lifecycle.
+  </Accordion>
+</AccordionGroup>
+
+## Source Code References
+
+- Package manifest: `Package.swift`
+- Main view controller: `shared/src/iosMain/kotlin/com/dadomatch/shared/MainViewController.kt`
+- iOS platform module: `shared/src/iosMain/kotlin/com/dadomatch/shared/di/AppModule.ios.kt`
+- Swift wrapper: `Sources/DadoMatchSharedWrapper/DadoMatchShared.swift`
+- Build configuration: `shared/build.gradle.kts:34-50`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Learn about the SDK's architecture and design patterns
+  </Card>
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Implement user authentication flows
+  </Card>
+  <Card title="UI Components" icon="palette" href="/guides/ui-components">
+    Explore available Compose UI components
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/core/koin-initializer">
+    Browse the complete API documentation
+  </Card>
+</CardGroup>

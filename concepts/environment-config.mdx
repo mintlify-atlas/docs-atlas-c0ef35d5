@@ -1,0 +1,521 @@
+---
+title: 'Environment Configuration'
+description: 'BuildKonfig-based environment management and configuration'
+icon: 'gear'
+---
+
+## Overview
+
+DadoMatch Shared SDK uses [BuildKonfig](https://github.com/yshrsmz/BuildKonfig) to generate compile-time configuration based on environment (stage vs. production). This ensures type-safe access to API keys, endpoints, and feature flags across Android and iOS.
+
+<Info>
+  BuildKonfig generates a Kotlin object at build time, making environment values available as constants. This is similar to Android's `BuildConfig` but works for Kotlin Multiplatform.
+</Info>
+
+## Configuration Sources
+
+Environment values are loaded from multiple sources with the following priority:
+
+<Steps>
+  <Step title="Command-line Arguments">
+    `-PappFlavor=production` or `-Papp.flavor=production`
+  </Step>
+  <Step title="Environment Variables">
+    `APP_FLAVOR=production`
+  </Step>
+  <Step title="local.properties">
+    `app.flavor=production` or `appFlavor=production`
+  </Step>
+  <Step title="Default Value">
+    Falls back to `stage` if none specified
+  </Step>
+</Steps>
+
+## Generated BuildKonfig Object
+
+BuildKonfig generates `com.dadomatch.shared.BuildKonfig` with these fields:
+
+<CodeGroup>
+```kotlin BuildKonfig (Generated)
+package com.dadomatch.shared
+
+object BuildKonfig {
+    const val GEMINI_API_KEY: String = "***"
+    const val GEMINI_MODEL_NAME: String = "gemini-2.5-flash-lite"
+    const val REVENUECAT_API_KEY: String = "***"
+    const val API_BASE_URL: String = "https://api-stage.dadomatch.com"
+    const val GOOGLE_WEB_CLIENT_ID: String = "***"
+    const val ENVIRONMENT: String = "stage"
+    const val IS_DEBUG: Boolean = true
+}
+```
+</CodeGroup>
+
+<Warning>
+  Never commit actual API keys to source control. Use `local.properties` (git-ignored) for local development.
+</Warning>
+
+## Build Configuration
+
+BuildKonfig is configured in `build.gradle.kts`:
+
+<CodeGroup>
+```kotlin build.gradle.kts
+buildkonfig {
+    packageName = "com.dadomatch.shared"
+    objectName = "BuildKonfig"
+    exposeObjectWithName = "BuildKonfig"
+
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localProperties.load(localPropertiesFile.inputStream())
+    }
+    
+    // Determine flavor from multiple sources
+    val appFlavor = (project.findProperty("appFlavor") 
+        ?: project.findProperty("app.flavor")
+        ?: System.getenv("APP_FLAVOR")
+        ?: localProperties.getProperty("appFlavor")
+        ?: localProperties.getProperty("app.flavor")
+        ?: "stage").toString()
+
+    val isProduction = appFlavor.trim().lowercase() == "production"
+    
+    println("BuildKonfig: Flavor detected: '$appFlavor' (isProduction: $isProduction)")
+    
+    defaultConfigs {
+        // Gemini API configuration
+        val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY")
+            ?: System.getenv("GEMINI_API_KEY")
+            ?: ""
+        val geminiModelName = localProperties.getProperty("GEMINI_MODEL_NAME")
+            ?: System.getenv("GEMINI_MODEL_NAME")
+            ?: "gemini-2.5-flash-lite"
+        
+        // Environment-specific RevenueCat key
+        val revenueCatApiKey = if (isProduction) {
+            localProperties.getProperty("PROD_REVENUECAT_API_KEY") 
+                ?: System.getenv("PROD_REVENUECAT_API_KEY") 
+                ?: ""
+        } else {
+            localProperties.getProperty("STAGE_REVENUECAT_API_KEY") 
+                ?: System.getenv("STAGE_REVENUECAT_API_KEY") 
+                ?: ""
+        }
+        
+        // Environment-specific API base URL
+        val apiBaseUrl = if (isProduction) {
+            localProperties.getProperty("PROD_API_BASE_URL")
+                ?: System.getenv("PROD_API_BASE_URL")
+                ?: "https://api.dadomatch.com"
+        } else {
+            localProperties.getProperty("STAGE_API_BASE_URL")
+                ?: System.getenv("STAGE_API_BASE_URL")
+                ?: "https://api-stage.dadomatch.com"
+        }
+        
+        val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID")
+            ?: System.getenv("GOOGLE_WEB_CLIENT_ID")
+            ?: ""
+        
+        val environment = if (isProduction) "production" else "stage"
+        val isDebug = !isProduction
+
+        buildConfigField(STRING, "GEMINI_API_KEY", geminiApiKey)
+        buildConfigField(STRING, "GEMINI_MODEL_NAME", geminiModelName)
+        buildConfigField(STRING, "REVENUECAT_API_KEY", revenueCatApiKey)
+        buildConfigField(STRING, "API_BASE_URL", apiBaseUrl)
+        buildConfigField(STRING, "GOOGLE_WEB_CLIENT_ID", googleWebClientId)
+        buildConfigField(STRING, "ENVIRONMENT", environment)
+        buildConfigField(BOOLEAN, "IS_DEBUG", isDebug.toString())
+    }
+}
+```
+</CodeGroup>
+
+## EnvironmentConfig Helper
+
+The SDK provides `EnvironmentConfig` for convenient access:
+
+<CodeGroup>
+```kotlin EnvironmentConfig.kt
+object EnvironmentConfig {
+    
+    val environment: String = BuildKonfig.ENVIRONMENT
+    val isDebug: Boolean = BuildKonfig.IS_DEBUG
+    val isProduction: Boolean = environment == "production"
+    val isStage: Boolean = environment == "stage"
+    
+    val geminiApiKey: String = BuildKonfig.GEMINI_API_KEY
+    val geminiModelName: String = BuildKonfig.GEMINI_MODEL_NAME
+    val revenueCatApiKey: String = BuildKonfig.REVENUECAT_API_KEY
+    val apiBaseUrl: String = BuildKonfig.API_BASE_URL
+    
+    fun getEnvironmentDisplay(): String {
+        return when (environment) {
+            "production" -> "🟢 Production"
+            "stage" -> "🟡 Stage"
+            else -> "⚪ Unknown"
+        }
+    }
+    
+    fun logConfig() {
+        println("=================================")
+        println("Environment: ${getEnvironmentDisplay()}")
+        println("Is Debug: $isDebug")
+        println("API Base URL: $apiBaseUrl")
+        println("Gemini Model: $geminiModelName")
+        println("RevenueCat Key: ${if (revenueCatApiKey.isNotEmpty()) "***configured***" else "NOT SET"}")
+        println("Gemini Key: ${if (geminiApiKey.isNotEmpty()) "***configured***" else "NOT SET"}")
+        println("=================================")
+    }
+}
+```
+</CodeGroup>
+
+### Usage Examples
+
+<CodeGroup>
+```kotlin Conditional Features
+if (EnvironmentConfig.isProduction) {
+    // Production-only analytics
+    initializeProductionAnalytics()
+} else {
+    // Debug logging for stage
+    enableVerboseLogging()
+}
+```
+
+```kotlin API Client Configuration
+val ktorClient = HttpClient {
+    install(ContentNegotiation) {
+        json()
+    }
+    defaultRequest {
+        url(EnvironmentConfig.apiBaseUrl)
+    }
+}
+```
+
+```kotlin Debug Display
+if (EnvironmentConfig.isDebug) {
+    Text(
+        text = "Environment: ${EnvironmentConfig.getEnvironmentDisplay()}",
+        style = MaterialTheme.typography.caption
+    )
+}
+```
+</CodeGroup>
+
+## local.properties Setup
+
+Create `local.properties` in your project root (git-ignored):
+
+<CodeGroup>
+```properties local.properties (Stage)
+# Environment Selection
+app.flavor=stage
+
+# Gemini AI Configuration
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL_NAME=gemini-2.5-flash-lite
+
+# RevenueCat API Keys
+STAGE_REVENUECAT_API_KEY=appl_your_stage_key
+PROD_REVENUECAT_API_KEY=appl_your_prod_key
+
+# API Base URLs
+STAGE_API_BASE_URL=https://api-stage.dadomatch.com
+PROD_API_BASE_URL=https://api.dadomatch.com
+
+# Google Sign-In
+GOOGLE_WEB_CLIENT_ID=your_client_id.apps.googleusercontent.com
+```
+
+```properties local.properties (Production)
+# Environment Selection
+app.flavor=production
+
+# (Same keys as above)
+GEMINI_API_KEY=your_gemini_api_key_here
+# ...
+```
+</CodeGroup>
+
+<Note>
+  Add `local.properties` to `.gitignore` to prevent committing secrets:
+  ```
+  # .gitignore
+  local.properties
+  ```
+</Note>
+
+## Building for Different Environments
+
+### Stage Build (Default)
+
+<CodeGroup>
+```bash Gradle
+./gradlew assembleDebug
+```
+
+```bash With Explicit Flavor
+./gradlew assembleDebug -Papp.flavor=stage
+```
+</CodeGroup>
+
+### Production Build
+
+<CodeGroup>
+```bash Command Line
+./gradlew assembleRelease -Papp.flavor=production
+```
+
+```bash Environment Variable
+APP_FLAVOR=production ./gradlew assembleRelease
+```
+</CodeGroup>
+
+### CI/CD Configuration
+
+<CodeGroup>
+```yaml GitHub Actions
+name: Build Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+      
+      - name: Build Production
+        env:
+          APP_FLAVOR: production
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PROD_REVENUECAT_API_KEY: ${{ secrets.PROD_REVENUECAT_API_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+        run: ./gradlew assembleRelease
+```
+</CodeGroup>
+
+## Configuration Fields
+
+<ParamField path="GEMINI_API_KEY" type="String">
+  Google Gemini API key for AI icebreaker generation
+  
+  **Source:** `GEMINI_API_KEY` from local.properties or env vars
+</ParamField>
+
+<ParamField path="GEMINI_MODEL_NAME" type="String" default="gemini-2.5-flash-lite">
+  Gemini model to use for text generation
+  
+  **Source:** `GEMINI_MODEL_NAME` from local.properties or env vars
+</ParamField>
+
+<ParamField path="REVENUECAT_API_KEY" type="String">
+  RevenueCat API key (environment-specific)
+  
+  **Stage:** `STAGE_REVENUECAT_API_KEY`  
+  **Production:** `PROD_REVENUECAT_API_KEY`
+</ParamField>
+
+<ParamField path="API_BASE_URL" type="String">
+  Backend API base URL (environment-specific)
+  
+  **Stage:** `https://api-stage.dadomatch.com`  
+  **Production:** `https://api.dadomatch.com`
+</ParamField>
+
+<ParamField path="GOOGLE_WEB_CLIENT_ID" type="String">
+  Google Sign-In web client ID
+  
+  **Source:** `GOOGLE_WEB_CLIENT_ID` from local.properties or env vars
+</ParamField>
+
+<ParamField path="ENVIRONMENT" type="String">
+  Current environment name
+  
+  **Values:** `"stage"` or `"production"`
+</ParamField>
+
+<ParamField path="IS_DEBUG" type="Boolean">
+  Whether this is a debug build
+  
+  **Values:** `true` for stage, `false` for production
+</ParamField>
+
+## Usage in Koin Modules
+
+BuildKonfig values are commonly used when initializing services:
+
+<CodeGroup>
+```kotlin IcebreakerModule.kt
+val icebreakerModule = module {
+    single { 
+        GeminiService(
+            apiKey = BuildKonfig.GEMINI_API_KEY,
+            modelName = BuildKonfig.GEMINI_MODEL_NAME
+        ) 
+    }
+    // ...
+}
+```
+
+```kotlin KoinInitializer.kt
+fun initKoin(appDeclaration: KoinAppDeclaration = {}) {
+    if (KoinPlatformTools.defaultContext().getOrNull() == null) {
+        startKoin {
+            appDeclaration()
+            modules(getAllModules())
+        }
+
+        val koin = KoinPlatformTools.defaultContext().get()
+        val revenueCatService = koin.get<RevenueCatService>()
+        revenueCatService.configure(BuildKonfig.REVENUECAT_API_KEY)
+    }
+}
+```
+</CodeGroup>
+
+## Debugging Configuration
+
+Use `EnvironmentConfig.logConfig()` to verify your configuration:
+
+<CodeGroup>
+```kotlin App Initialization
+fun initKoin(appDeclaration: KoinAppDeclaration = {}) {
+    if (KoinPlatformTools.defaultContext().getOrNull() == null) {
+        // Log configuration in debug builds
+        if (BuildKonfig.IS_DEBUG) {
+            EnvironmentConfig.logConfig()
+        }
+        
+        startKoin { /* ... */ }
+    }
+}
+```
+
+```text Console Output
+=================================
+Environment: 🟡 Stage
+Is Debug: true
+API Base URL: https://api-stage.dadomatch.com
+Gemini Model: gemini-2.5-flash-lite
+RevenueCat Key: ***configured***
+Gemini Key: ***configured***
+=================================
+```
+</CodeGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Secret Management">
+    - Never commit `local.properties` to version control
+    - Use environment variables in CI/CD pipelines
+    - Rotate API keys regularly, especially after team member changes
+    - Use separate keys for stage and production environments
+  </Accordion>
+  
+  <Accordion title="Environment Detection">
+    - Use `EnvironmentConfig.isProduction` for conditional logic
+    - Enable debug features only in stage: `if (EnvironmentConfig.isDebug)`
+    - Display environment indicator in UI during development
+  </Accordion>
+  
+  <Accordion title="Build Variants">
+    - Always test stage builds before deploying to production
+    - Use `-Papp.flavor=production` explicitly in release scripts
+    - Verify `BuildKonfig.ENVIRONMENT` in runtime logs
+  </Accordion>
+  
+  <Accordion title="API Configuration">
+    - Use separate backend URLs for stage and production
+    - Test against stage API during development
+    - Ensure stage API keys have limited permissions
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Missing API Keys">
+    **Problem:** BuildKonfig fields are empty strings
+    
+    **Solution:**
+    - Verify `local.properties` exists in project root
+    - Check property names match exactly (case-sensitive)
+    - Ensure `local.properties` is loaded before buildkonfig block runs
+    - For CI/CD, verify environment variables are set correctly
+  </Accordion>
+  
+  <Accordion title="Wrong Environment Selected">
+    **Problem:** Building for production but getting stage config
+    
+    **Solution:**
+    - Explicitly pass `-Papp.flavor=production` to Gradle
+    - Check `local.properties` doesn't override with `app.flavor=stage`
+    - Verify environment variable `APP_FLAVOR` is set correctly
+    - Run `./gradlew clean` to clear cached configuration
+  </Accordion>
+  
+  <Accordion title="BuildKonfig Not Regenerated">
+    **Problem:** Changed configuration but BuildKonfig still has old values
+    
+    **Solution:**
+    - Run `./gradlew clean` to force regeneration
+    - Invalidate caches in IDE (File > Invalidate Caches / Restart)
+    - Delete `build/` directories manually if needed
+  </Accordion>
+</AccordionGroup>
+
+## Example: Feature Flagging
+
+Use BuildKonfig for environment-based feature flags:
+
+<CodeGroup>
+```kotlin build.gradle.kts
+defaultConfigs {
+    val enableAnalytics = isProduction
+    val enableDebugMenu = !isProduction
+    
+    buildConfigField(BOOLEAN, "ENABLE_ANALYTICS", enableAnalytics.toString())
+    buildConfigField(BOOLEAN, "ENABLE_DEBUG_MENU", enableDebugMenu.toString())
+}
+```
+
+```kotlin App Code
+if (BuildKonfig.ENABLE_ANALYTICS) {
+    initializeAnalytics()
+}
+
+if (BuildKonfig.ENABLE_DEBUG_MENU) {
+    FloatingActionButton(
+        onClick = { showDebugMenu() }
+    ) {
+        Icon(Icons.Default.BugReport, contentDescription = "Debug")
+    }
+}
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture Overview" icon="sitemap" href="/concepts/architecture">
+    Learn about clean architecture and feature modules
+  </Card>
+  <Card title="Dependency Injection" icon="link" href="/concepts/dependency-injection">
+    Understand Koin DI setup and module configuration
+  </Card>
+</CardGroup>

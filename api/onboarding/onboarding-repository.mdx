@@ -1,0 +1,84 @@
+---
+title: 'PreferenceRepository'
+description: 'Repository interface for managing user preferences and onboarding state'
+---
+
+## Overview
+
+The `PreferenceRepository` interface provides a simple API for managing user preferences, specifically tracking whether the user has completed the onboarding flow.
+
+**Package:** `com.dadomatch.shared.feature.onboarding.domain.repository`
+
+<Note>
+  This repository is part of the onboarding feature module and is used to persist onboarding completion state.
+</Note>
+
+## Methods
+
+### isOnboardingCompleted
+
+<ParamField path="isOnboardingCompleted" type="() -> Flow<Boolean>">
+  Get the onboarding completion status as a Flow for reactive updates. This allows observers to react when the onboarding status changes.
+</ParamField>
+
+**Returns:** `Flow<Boolean>` - A Flow that emits `true` if onboarding is completed, `false` otherwise
+
+**Example:**
+```kotlin
+preferenceRepository.isOnboardingCompleted()
+    .collect { isCompleted ->
+        if (isCompleted) {
+            // Navigate to main screen
+        } else {
+            // Show onboarding screen
+        }
+    }
+```
+
+---
+
+### setOnboardingCompleted
+
+<ParamField path="setOnboardingCompleted" type="suspend (completed: Boolean) -> Unit">
+  Set the onboarding completion status. This should be called when the user completes or resets the onboarding flow.
+</ParamField>
+
+**Parameters:**
+- `completed` (Boolean) - `true` to mark onboarding as completed, `false` to reset it
+
+**Example:**
+```kotlin
+// Mark onboarding as completed
+preferenceRepository.setOnboardingCompleted(true)
+```
+
+```kotlin
+// Reset onboarding (e.g., for testing)
+preferenceRepository.setOnboardingCompleted(false)
+```
+
+## Usage Pattern
+
+Typically, this repository is used in conjunction with use cases:
+
+```kotlin
+// Check onboarding status
+val onboardingStatus = getOnboardingStatusUseCase()
+onboardingStatus.collect { isCompleted ->
+    // Update UI based on status
+}
+
+// Complete onboarding
+setOnboardingStatusUseCase(completed = true)
+```
+
+## Implementation Notes
+
+- The actual implementation (`PreferenceRepositoryImpl`) typically uses DataStore or SharedPreferences to persist the onboarding state
+- The Flow-based API ensures that any UI observing the onboarding status will automatically update when the state changes
+- This is a simple boolean flag, but the repository pattern allows for easy extension to support additional preferences in the future
+
+## Related Use Cases
+
+- `GetOnboardingStatusUseCase` - Use case for retrieving onboarding status
+- `SetOnboardingStatusUseCase` - Use case for updating onboarding status

@@ -1,0 +1,519 @@
+---
+title: Troubleshooting
+description: Common issues and solutions when working with DadoMatch Shared SDK
+---
+
+This guide covers common integration issues and their solutions.
+
+## Platform-Specific Issues
+
+### iOS
+
+<Accordion title="XCFramework not found after adding package">
+
+**Problem:** Xcode cannot find the DadoMatchShared module after adding the package.
+
+**Solution:**
+
+1. Clean build folder: **Product → Clean Build Folder** (⇧⌘K)
+2. Delete derived data:
+   ```bash
+   rm -rf ~/Library/Developer/Xcode/DerivedData
+   ```
+3. Reset package cache:
+   ```bash
+   rm -rf ~/Library/Caches/org.swift.swiftpm
+   ```
+4. In Xcode: **File → Packages → Reset Package Caches**
+5. Rebuild: **Product → Build** (⌘B)
+
+</Accordion>
+
+<Accordion title="Authentication failed: Missing GitHub credentials">
+
+**Problem:** Remote package integration fails with authentication errors.
+
+**Solution:**
+
+Create or update `~/.netrc` with your GitHub credentials:
+
+```bash
+machine api.github.com
+  login your-github-username
+  password your-personal-access-token
+machine github.com
+  login your-github-username
+  password your-personal-access-token
+```
+
+<Note>
+  Generate a Personal Access Token at [github.com/settings/tokens](https://github.com/settings/tokens) with `repo` scope.
+</Note>
+
+</Accordion>
+
+<Accordion title="Minimum iOS version error">
+
+**Problem:** Build fails with error about iOS version compatibility.
+
+**Solution:**
+
+The SDK requires iOS 16.0+. Update your deployment target:
+
+1. In Xcode, select your project
+2. Under **Targets**, select your app
+3. Go to **General** tab
+4. Set **Minimum Deployments** to iOS 16.0 or higher
+
+Or in `Package.swift`:
+
+```swift
+platforms: [
+    .iOS(.v16)
+]
+```
+
+</Accordion>
+
+<Accordion title="RevenueCat initialization error on iOS">
+
+**Problem:** RevenueCat throws configuration errors on app startup.
+
+**Solution:**
+
+Ensure you call `initKoin()` before accessing any shared functionality:
+
+```swift
+func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+) -> Bool {
+    KoinInitializerKt.initKoin() // Must be called first
+    return true
+}
+```
+
+</Accordion>
+
+### Android
+
+<Accordion title="Build fails: includeBuild not found">
+
+**Problem:** Gradle cannot find the shared module with `includeBuild`.
+
+**Solution:**
+
+Ensure the path in `settings.gradle.kts` is correct:
+
+```kotlin
+includeBuild("../dado-match-shared") {
+    dependencySubstitution {
+        substitute(module("com.dadomatch.shared:shared"))
+            .using(project(":shared"))
+    }
+}
+```
+
+Verify the relative path matches your project structure.
+
+</Accordion>
+
+<Accordion title="Duplicate class errors">
+
+**Problem:** Build fails with "Duplicate class" errors.
+
+**Solution:**
+
+This usually indicates a dependency conflict. Check your `build.gradle.kts`:
+
+1. Ensure you're not including conflicting versions of:
+   - Kotlin stdlib
+   - Compose runtime
+   - Ktor client
+   - Koin
+
+2. Use consistent dependency versions:
+
+```kotlin
+dependencies {
+    // Use 'implementation' instead of 'api' if possible
+    implementation("com.dadomatch.shared:shared")
+    
+    // Exclude conflicting transitive dependencies
+    implementation("com.example:library") {
+        exclude(group = "org.jetbrains.kotlin")
+    }
+}
+```
+
+</Accordion>
+
+<Accordion title="Room database crashes on startup">
+
+**Problem:** App crashes with Room database initialization errors.
+
+**Solution:**
+
+Ensure `initKoinAndroid()` is called before any database operations:
+
+```kotlin
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        initKoinAndroid(this) // Initialize before anything else
+    }
+}
+```
+
+Don't forget to register the application in `AndroidManifest.xml`:
+
+```xml
+<application
+    android:name=".MyApplication"
+    ...>
+</application>
+```
+
+</Accordion>
+
+## Build and Configuration
+
+<Accordion title="Environment variables not found">
+
+**Problem:** Build fails with missing API keys or configuration.
+
+**Solution:**
+
+Create a `local.properties` file in the project root:
+
+```properties
+# Required API Keys
+GEMINI_API_KEY=your_gemini_api_key
+STAGE_REVENUECAT_API_KEY=your_stage_key
+PROD_REVENUECAT_API_KEY=your_prod_key
+GOOGLE_WEB_CLIENT_ID=your_google_client_id
+
+# Optional Configuration
+GEMINI_MODEL_NAME=gemini-2.5-flash-lite
+STAGE_API_BASE_URL=https://api-stage.dadomatch.com
+PROD_API_BASE_URL=https://api.dadomatch.com
+
+# Set environment (stage or production)
+app.flavor=stage
+```
+
+<Warning>
+  Never commit `local.properties` to version control. Add it to `.gitignore`.
+</Warning>
+
+</Accordion>
+
+<Accordion title="Out of memory during XCFramework build">
+
+**Problem:** Gradle build fails with OOM error during iOS framework compilation.
+
+**Solution:**
+
+The project is already configured for optimal memory usage. If you still encounter issues:
+
+1. Check `gradle.properties`:
+
+```properties
+kotlin.native.jvmArgs=-Xmx12g
+org.gradle.jvmargs=-Xmx2g
+```
+
+2. Build with limited parallelism:
+
+```bash
+./gradlew shared:assembleDadoMatchSharedReleaseXCFramework \
+  --no-daemon \
+  --max-workers 1
+```
+
+3. Close other applications to free up memory
+
+</Accordion>
+
+## Runtime Issues
+
+<Accordion title="Koin dependency injection errors">
+
+**Problem:** `NoBeanDefFoundException` or "No definition found" errors.
+
+**Solution:**
+
+1. Ensure Koin is initialized before accessing dependencies:
+
+```kotlin
+// Android
+initKoinAndroid(context)
+
+// iOS
+KoinInitializerKt.initKoin()
+```
+
+2. Verify the dependency is registered in a module:
+
+```kotlin
+val myModule = module {
+    singleOf(::MyService)
+}
+```
+
+3. Check that the module is included in `getAllModules()`
+
+</Accordion>
+
+<Accordion title="Firebase authentication not working">
+
+**Problem:** Firebase auth fails silently or throws configuration errors.
+
+**Solution:**
+
+**For Android:**
+
+1. Add `google-services.json` to `app/` directory
+2. Add Firebase plugin to `build.gradle.kts`:
+
+```kotlin
+plugins {
+    id("com.google.gms.google-services")
+}
+```
+
+**For iOS:**
+
+1. Add `GoogleService-Info.plist` to Xcode project
+2. Initialize Firebase before calling `initKoin()`:
+
+```swift
+import Firebase
+import DadoMatchShared
+
+FirebaseApp.configure()
+KoinInitializerKt.initKoin()
+```
+
+</Accordion>
+
+<Accordion title="RevenueCat purchases not working">
+
+**Problem:** Subscription purchases fail or don't sync properly.
+
+**Solution:**
+
+1. **Verify API keys** are correct for your environment (stage vs production)
+
+2. **Check user login status:**
+
+```kotlin
+// Link user with RevenueCat after authentication
+val revenueCatService: RevenueCatService = get()
+val firebaseUserId = Firebase.auth.currentUser?.uid
+
+if (firebaseUserId != null) {
+    revenueCatService.logIn(firebaseUserId)
+}
+```
+
+3. **Test with sandbox/test accounts:**
+   - iOS: Use sandbox Apple ID
+   - Android: Use test Google account added in Play Console
+
+4. **Restore purchases** if user reinstalls:
+
+```kotlin
+revenueCatService.restorePurchases()
+```
+
+</Accordion>
+
+<Accordion title="Compose UI not rendering correctly">
+
+**Problem:** Shared Compose UI shows blank screen or layout issues.
+
+**Solution:**
+
+1. **Ensure proper initialization:**
+
+```swift iOS
+struct ComposeView: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        MainViewControllerKt.MainViewController()
+    }
+    
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+```
+
+2. **Check safe area handling:**
+
+```swift
+ComposeView()
+    .ignoresSafeArea() // If needed for full screen
+```
+
+3. **Verify theme is applied:**
+
+```kotlin
+AppTheme {
+    YourScreen()
+}
+```
+
+</Accordion>
+
+## Network and API Issues
+
+<Accordion title="Ktor client SSL/TLS errors">
+
+**Problem:** Network requests fail with SSL certificate errors.
+
+**Solution:**
+
+1. **Ensure proper network permissions:**
+
+**Android:**
+```xml AndroidManifest.xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+```
+
+**iOS:** Add to `Info.plist` if using HTTP (not recommended):
+```xml
+<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <false/>
+</dict>
+```
+
+2. **Verify API endpoints are HTTPS**
+
+3. **Check certificate validity** of your backend
+
+</Accordion>
+
+<Accordion title="AI/Gemini API rate limiting">
+
+**Problem:** Icebreaker generation fails with rate limit errors.
+
+**Solution:**
+
+1. **Implement retry logic with exponential backoff**
+
+2. **Cache recent generations** to reduce API calls
+
+3. **Monitor API quota** in Google Cloud Console
+
+4. **Consider upgrading API tier** for higher rate limits
+
+</Accordion>
+
+## Version Compatibility
+
+<Accordion title="Kotlin version mismatch">
+
+**Problem:** Build fails due to Kotlin version incompatibility.
+
+**Solution:**
+
+The SDK uses specific Kotlin and Compose versions. Match these in your app:
+
+```kotlin build.gradle.kts
+plugins {
+    kotlin("multiplatform") version "2.0.20"
+    id("org.jetbrains.compose") version "1.7.0"
+}
+```
+
+Check the SDK's `build.gradle.kts` for exact versions.
+
+</Accordion>
+
+<Accordion title="Gradle version issues">
+
+**Problem:** Gradle sync fails or shows compatibility warnings.
+
+**Solution:**
+
+Ensure you're using a compatible Gradle version:
+
+```properties gradle/wrapper/gradle-wrapper.properties
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+```
+
+Update wrapper:
+```bash
+./gradlew wrapper --gradle-version 8.5
+```
+
+</Accordion>
+
+## Debugging Tips
+
+<Note>
+  Enable verbose logging to diagnose issues:
+
+```kotlin
+// Check BuildKonfig for debug mode
+if (BuildKonfig.IS_DEBUG) {
+    println("Debug mode enabled")
+}
+```
+</Note>
+
+### Enable Koin Logging
+
+```kotlin
+startKoin {
+    printLogger(Level.DEBUG)
+    modules(getAllModules())
+}
+```
+
+### Enable Ktor Logging
+
+```kotlin
+val client = HttpClient {
+    install(Logging) {
+        level = LogLevel.ALL
+    }
+}
+```
+
+### Check RevenueCat Debug Logs
+
+```kotlin
+// Android
+Purchases.logLevel = LogLevel.DEBUG
+
+// iOS
+Purchases.logLevel = .debug
+```
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/felipechaux/dado-match-shared/issues">
+    Report bugs or request features
+  </Card>
+  <Card title="Examples" icon="code" href="/resources/examples">
+    View code examples and patterns
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/core/koin-initializer">
+    Detailed API documentation
+  </Card>
+  <Card title="Contributing" icon="hands-helping" href="/resources/contributing">
+    Contribute to the SDK
+  </Card>
+</CardGroup>
+
+<Warning>
+  If you're still experiencing issues after trying these solutions, please open a GitHub issue with:
+  - Platform and version (iOS/Android)
+  - SDK version
+  - Complete error message and stack trace
+  - Minimal reproducible example
+</Warning>

@@ -1,0 +1,533 @@
+---
+title: Contributing Guide
+description: How to contribute to the DadoMatch Shared SDK
+---
+
+Thank you for your interest in contributing to the DadoMatch Shared SDK! This guide will help you get started.
+
+## Getting Started
+
+### Prerequisites
+
+Before contributing, ensure you have the following installed:
+
+- **JDK 17+** - Required for Gradle and Kotlin compilation
+- **Xcode 15+** - Required for iOS builds (macOS only)
+- **Android SDK** - For Android development
+- **Git** - Version control
+
+<Note>
+  Kotlin Multiplatform development works best on macOS, where you can build for both iOS and Android. Linux and Windows can build Android only.
+</Note>
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/felipechaux/dado-match-shared.git
+cd dado-match-shared
+```
+
+### Set Up Local Configuration
+
+Create a `local.properties` file in the project root with required API keys:
+
+```properties
+# Required for development
+GEMINI_API_KEY=your_gemini_api_key
+STAGE_REVENUECAT_API_KEY=your_stage_revenuecat_key
+GOOGLE_WEB_CLIENT_ID=your_google_web_client_id
+
+# Optional - defaults are provided
+GEMINI_MODEL_NAME=gemini-2.5-flash-lite
+STAGE_API_BASE_URL=https://api-stage.dadomatch.com
+app.flavor=stage
+```
+
+<Warning>
+  Never commit `local.properties` to the repository. It's already in `.gitignore`.
+</Warning>
+
+---
+
+## Development Workflow
+
+### 1. Create a Feature Branch
+
+```bash
+git checkout -b feature/your-feature-name
+```
+
+### Branch Naming Convention
+
+- `feature/` - New features
+- `fix/` - Bug fixes
+- `refactor/` - Code refactoring
+- `docs/` - Documentation updates
+- `test/` - Test additions or fixes
+
+**Examples:**
+- `feature/add-password-reset`
+- `fix/subscription-sync-issue`
+- `refactor/improve-auth-flow`
+
+### 2. Make Your Changes
+
+Follow the project's architecture patterns:
+
+<Accordion title="Architecture Guidelines">
+
+#### Clean Architecture Layers
+
+The SDK follows clean architecture principles:
+
+```
+feature/
+├── presentation/    # UI, ViewModels, Compose screens
+│   ├── ui/
+│   └── viewmodel/
+├── domain/          # Business logic, use cases, models
+│   ├── usecase/
+│   ├── repository/  (interfaces)
+│   └── model/
+├── data/            # Data sources, repositories
+│   ├── repository/  (implementations)
+│   ├── remote/
+│   ├── local/
+│   └── mapper/
+└── di/              # Dependency injection modules
+```
+
+#### Key Principles
+
+1. **Domain layer** has no dependencies on presentation or data layers
+2. **Data layer** implements interfaces defined in domain
+3. **Presentation layer** depends only on domain
+4. Use **Koin** for dependency injection
+5. Keep platform-specific code in `androidMain/` and `iosMain/`
+
+</Accordion>
+
+<Accordion title="Code Style Guidelines">
+
+#### Kotlin Code Style
+
+The project uses ktlint for code formatting:
+
+```bash
+# Check code style
+./gradlew ktlintCheck
+
+# Auto-format code
+./gradlew ktlintFormat
+```
+
+#### Naming Conventions
+
+**Files and Classes:**
+- Use PascalCase: `UserRepository`, `AuthViewModel`
+- Interfaces don't need "I" prefix: `Repository`, not `IRepository`
+- Implementations can have descriptive suffixes: `RepositoryImpl`
+
+**Functions:**
+- Use camelCase: `getUserProfile()`, `validateInput()`
+- Boolean functions start with `is`, `has`, `should`: `isLoggedIn()`, `hasPermission()`
+
+**Constants:**
+- Use SCREAMING_SNAKE_CASE: `MAX_RETRY_COUNT`, `API_TIMEOUT`
+
+**Compose Components:**
+- Use PascalCase: `@Composable fun UserProfileCard()`
+
+</Accordion>
+
+<Accordion title="Testing Guidelines">
+
+#### Writing Tests
+
+Add tests for new functionality:
+
+```kotlin
+class MyUseCaseTest {
+    private lateinit var useCase: MyUseCase
+    private lateinit var mockRepository: Repository
+    
+    @BeforeEach
+    fun setup() {
+        mockRepository = mockk()
+        useCase = MyUseCase(mockRepository)
+    }
+    
+    @Test
+    fun `should return success when repository succeeds`() = runTest {
+        // Given
+        val expected = "result"
+        coEvery { mockRepository.getData() } returns Result.success(expected)
+        
+        // When
+        val result = useCase()
+        
+        // Then
+        assertTrue(result is Resource.Success)
+        assertEquals(expected, (result as Resource.Success).data)
+    }
+}
+```
+
+#### Running Tests
+
+```bash
+# Run all tests
+./gradlew shared:test
+
+# Run Android tests
+./gradlew shared:testDebugUnitTest
+
+# Run iOS tests
+./gradlew shared:iosSimulatorArm64Test
+```
+
+</Accordion>
+
+### 3. Build and Test Locally
+
+<CodeGroup>
+
+```bash Android
+# Build Android library
+./gradlew shared:assembleRelease
+
+# Run tests
+./gradlew shared:test
+```
+
+```bash iOS
+# Build XCFramework (Debug)
+./gradlew shared:assembleDadoMatchSharedDebugXCFramework
+
+# Build XCFramework (Release)
+./gradlew shared:assembleDadoMatchSharedReleaseXCFramework
+```
+
+</CodeGroup>
+
+### 4. Commit Your Changes
+
+Follow conventional commits format:
+
+```bash
+git add .
+git commit -m "feat: add password reset functionality"
+```
+
+#### Commit Message Format
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Types:**
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `refactor:` - Code refactoring
+- `docs:` - Documentation changes
+- `test:` - Test additions or updates
+- `chore:` - Build process or tooling changes
+- `style:` - Code style changes (formatting)
+
+**Examples:**
+
+```bash
+feat(auth): add biometric authentication support
+fix(subscription): resolve purchase restoration issue
+refactor(database): improve Room migration strategy
+docs(readme): update installation instructions
+```
+
+### 5. Push and Create Pull Request
+
+```bash
+git push origin feature/your-feature-name
+```
+
+Then create a Pull Request on GitHub:
+
+1. Go to the repository on GitHub
+2. Click "Pull Requests" → "New Pull Request"
+3. Select your branch
+4. Fill in the PR template (see below)
+5. Submit for review
+
+---
+
+## Pull Request Guidelines
+
+### PR Template
+
+```markdown
+## Description
+Brief description of the changes
+
+## Type of Change
+- [ ] Bug fix (non-breaking change)
+- [ ] New feature (non-breaking change)
+- [ ] Breaking change
+- [ ] Documentation update
+
+## Testing
+- [ ] Unit tests added/updated
+- [ ] Manual testing completed
+- [ ] Tested on Android
+- [ ] Tested on iOS
+
+## Checklist
+- [ ] Code follows project style guidelines
+- [ ] Self-review completed
+- [ ] Comments added for complex code
+- [ ] Documentation updated
+- [ ] No new warnings introduced
+- [ ] Tests pass locally
+
+## Screenshots (if applicable)
+[Add screenshots or videos demonstrating the changes]
+
+## Related Issues
+Closes #123
+```
+
+### PR Review Process
+
+1. **Automated Checks** - CI runs tests and linting
+2. **Code Review** - Maintainers review code quality and architecture
+3. **Testing** - Changes tested on both platforms
+4. **Approval** - At least one approval required
+5. **Merge** - Squash and merge into main branch
+
+<Note>
+  Be responsive to feedback and be prepared to make revisions. Reviews help maintain code quality!
+</Note>
+
+---
+
+## Code Review Checklist
+
+When reviewing PRs, check for:
+
+- [ ] **Architecture** - Follows clean architecture patterns
+- [ ] **Code Quality** - Readable, maintainable, well-documented
+- [ ] **Testing** - Adequate test coverage
+- [ ] **Performance** - No obvious performance issues
+- [ ] **Security** - No security vulnerabilities introduced
+- [ ] **Platform Support** - Works on both iOS and Android
+- [ ] **Breaking Changes** - Documented if present
+- [ ] **Dependencies** - New dependencies justified and minimal
+
+---
+
+## Release Process
+
+<Warning>
+  Releases are created by maintainers only. Contributors should focus on feature branches and PRs.
+</Warning>
+
+### Creating a Release (Maintainers)
+
+```bash
+# Ensure main is up to date
+git checkout main && git pull
+
+# Create version tag (triggers automated release)
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The GitHub Actions workflow will automatically:
+- Build the XCFramework
+- Create a GitHub release
+- Update `Package.swift`
+- Commit changes back to main
+
+See the [Changelog](/resources/changelog) for version history.
+
+---
+
+## Project Structure
+
+```
+dado-match-shared/
+├── .github/
+│   └── workflows/
+│       └── release.yml          # Automated release workflow
+├── shared/
+│   ├── src/
+│   │   ├── commonMain/          # Shared code
+│   │   │   ├── kotlin/
+│   │   │   │   └── com/dadomatch/shared/
+│   │   │   │       ├── core/    # Core utilities
+│   │   │   │       ├── feature/ # Feature modules
+│   │   │   │       ├── presentation/ # UI
+│   │   │   │       └── di/      # DI setup
+│   │   │   └── resources/       # Shared resources
+│   │   ├── androidMain/         # Android-specific
+│   │   └── iosMain/             # iOS-specific
+│   └── build.gradle.kts         # Module build config
+├── Sources/
+│   └── DadoMatchSharedWrapper/  # Swift wrapper
+├── Package.swift                # SPM manifest
+├── VERSION                      # Current version
+├── build.gradle.kts            # Root build config
+└── gradle.properties           # Gradle settings
+```
+
+---
+
+## Common Tasks
+
+<Accordion title="Adding a new feature module">
+
+### 1. Create Feature Structure
+
+```
+feature/myfeature/
+├── presentation/
+│   ├── ui/
+│   │   └── MyFeatureScreen.kt
+│   └── viewmodel/
+│       └── MyFeatureViewModel.kt
+├── domain/
+│   ├── usecase/
+│   │   └── GetMyDataUseCase.kt
+│   ├── repository/
+│   │   └── MyFeatureRepository.kt
+│   └── model/
+│       └── MyData.kt
+├── data/
+│   └── repository/
+│       └── MyFeatureRepositoryImpl.kt
+└── di/
+    └── MyFeatureModule.kt
+```
+
+### 2. Create Koin Module
+
+```kotlin
+val myFeatureModule = module {
+    singleOf(::MyFeatureRepositoryImpl) { bind<MyFeatureRepository>() }
+    factoryOf(::GetMyDataUseCase)
+    viewModelOf(::MyFeatureViewModel)
+}
+```
+
+### 3. Register Module
+
+```kotlin AppModule.kt
+fun getAllModules() = listOf(
+    platformModule(),
+    coreModule,
+    myFeatureModule, // Add here
+    // ... other modules
+)
+```
+
+</Accordion>
+
+<Accordion title="Adding platform-specific code">
+
+### 1. Define Expect Declaration (Common)
+
+```kotlin commonMain
+expect class PlatformSpecificThing {
+    fun doSomething(): String
+}
+```
+
+### 2. Implement for Android
+
+```kotlin androidMain
+actual class PlatformSpecificThing {
+    actual fun doSomething(): String {
+        return "Android implementation"
+    }
+}
+```
+
+### 3. Implement for iOS
+
+```kotlin iosMain
+actual class PlatformSpecificThing {
+    actual fun doSomething(): String {
+        return "iOS implementation"
+    }
+}
+```
+
+</Accordion>
+
+<Accordion title="Updating dependencies">
+
+### 1. Update Version Catalog
+
+Edit `gradle/libs.versions.toml`:
+
+```toml
+[versions]
+ktor = "3.0.0"  # Update version
+
+[libraries]
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+```
+
+### 2. Sync and Test
+
+```bash
+./gradlew --refresh-dependencies
+./gradlew shared:test
+```
+
+### 3. Document Breaking Changes
+
+If the update introduces breaking changes, document them in your PR.
+
+</Accordion>
+
+---
+
+## Communication
+
+- **GitHub Issues** - Bug reports and feature requests
+- **Pull Requests** - Code contributions and discussions
+- **Email** - For sensitive issues: [ChauxDevApps contact]
+
+---
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the same proprietary license as the project (ChauxDevApps).
+
+---
+
+## Questions?
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/felipechaux/dado-match-shared/issues">
+    Ask questions or report issues
+  </Card>
+  <Card title="Examples" icon="code" href="/resources/examples">
+    View code examples
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Learn about the architecture
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/core/koin-initializer">
+    Browse API documentation
+  </Card>
+</CardGroup>
+
+---
+
+## Thank You!
+
+Your contributions make this SDK better for everyone. We appreciate your time and effort! 🎉

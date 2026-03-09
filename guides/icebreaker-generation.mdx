@@ -1,0 +1,596 @@
+---
+title: 'Icebreaker Generation'
+description: 'Generate personalized icebreakers using AI with the DadoMatch Shared SDK'
+icon: 'sparkles'
+---
+
+The icebreaker generation system is the core feature of DadoMatch, providing AI-powered conversation starters based on environment, intensity, and language preferences.
+
+## Architecture Overview
+
+The icebreaker system follows a clean architecture pattern:
+
+- **HomeViewModel**: Orchestrates the generation flow and manages UI state
+- **GenerateIcebreakerUseCase**: Handles the business logic for generating icebreakers
+- **IcebreakerRepository**: Interfaces with the AI service (Gemini)
+- **RollDiceUseCase**: Manages daily roll limits for free users
+
+## Quick Start
+
+<Steps>
+  <Step title="Set Up the ViewModel">
+    Inject the `HomeViewModel` using Koin:
+
+    ```kotlin
+    @Composable
+    fun HomeScreen() {
+        val viewModel: HomeViewModel = koinViewModel()
+        val uiState by viewModel.uiState.collectAsState()
+    }
+    ```
+  </Step>
+
+  <Step title="Trigger Icebreaker Generation">
+    Call `onRollComplete` with user selections:
+
+    ```kotlin
+    val environment = "env_party"  // Party environment
+    val intensity = "int_funny"    // Funny intensity
+    val language = "en"            // English
+
+    LaunchButton(
+        onClick = {
+            viewModel.onRollComplete(
+                environment = environment,
+                intensity = intensity,
+                language = language
+            )
+        }
+    )
+    ```
+  </Step>
+
+  <Step title="Display the Generated Icebreaker">
+    Show the icebreaker in a dialog when ready:
+
+    ```kotlin
+    if (uiState.showIcebreaker) {
+        IcebreakerDialog(
+            text = uiState.currentIcebreaker,
+            onDismiss = { viewModel.onIcebreakerDismissed() }
+        )
+    }
+    ```
+  </Step>
+</Steps>
+
+## Generation Flow
+
+The generation process involves multiple steps with built-in validations:
+
+### Step 1: Roll Validation
+
+Before generating, the system checks if the user has rolls remaining:
+
+```kotlin
+// From HomeViewModel.kt:73-85
+val rollResult = rollDiceUseCase()
+if (rollResult.isFailure) {
+    val exception = rollResult.exceptionOrNull()
+    _uiState.update { 
+        it.copy(
+            isLoading = false, 
+            showPaywallNavigation = exception is NoRollsRemainingException,
+            error = if (exception is NoRollsRemainingException) null else exception?.message
+        ) 
+    }
+    return@launch
+}
+```
+
+<Note>
+  Free users have limited daily rolls. When they run out, `NoRollsRemainingException` is thrown and the paywall is displayed.
+</Note>
+
+### Step 2: Entitlement Check
+
+Certain intensity levels (like "Spicy") require premium access:
+
+```kotlin
+// From HomeViewModel.kt:87-96
+if (!checkEntitlementUseCase.canAccessCategory(intensity)) {
+    _uiState.update { 
+        it.copy(
+            isLoading = false,
+            showPaywallNavigation = true
+        )
+    }
+    return@launch
+}
+```
+
+### Step 3: AI Generation
+
+Once validated, the icebreaker is generated using the Gemini AI service:
+
+```kotlin
+// From HomeViewModel.kt:98-120
+when (val result = generateIcebreakerUseCase(environment, intensity, language)) {
+    is Resource.Success -> {
+        _uiState.update { 
+            it.copy(
+                isLoading = false,
+                currentIcebreaker = result.data,
+                showIcebreaker = true
+            )
+        }
+    }
+    is Resource.Error -> {
+        _uiState.update { 
+            it.copy(
+                isLoading = false,
+                error = result.message
+            )
+        }
+    }
+    Resource.Loading -> {
+        _uiState.update { it.copy(isLoading = true) }
+    }
+}
+```
+
+## Use Cases
+
+### GenerateIcebreakerUseCase
+
+The primary use case for generating icebreakers:
+
+```kotlin
+// From GenerateIcebreakerUseCase.kt
+class GenerateIcebreakerUseCase(private val repository: IcebreakerRepository) {
+    suspend operator fun invoke(
+        environment: String, 
+        intensity: String, 
+        language: String
+    ): Resource<String> {
+        return repository.generateIcebreaker(environment, intensity, language)
+    }
+}
+```
+
+**Usage Example:**
+
+```kotlin
+class MyViewModel(
+    private val generateIcebreaker: GenerateIcebreakerUseCase
+) : ViewModel() {
+    
+    fun generateCustomIcebreaker() {
+        viewModelScope.launch {
+            when (val result = generateIcebreaker(
+                environment = "env_coffee_shop",
+                intensity = "int_flirty",
+                language = "es"
+            )) {
+                is Resource.Success -> {
+                    println("Generated: ${result.data}")
+                }
+                is Resource.Error -> {
+                    println("Error: ${result.message}")
+                }
+                Resource.Loading -> {
+                    println("Generating...")
+                }
+            }
+        }
+    }
+}
+```
+
+### SubmitFeedbackUseCase
+
+Collect user feedback on generated icebreakers:
+
+```kotlin
+// From SubmitFeedbackUseCase.kt
+class SubmitFeedbackUseCase(private val repository: IcebreakerRepository) {
+    suspend operator fun invoke(icebreaker: String, feedback: IcebreakerFeedback) {
+        repository.submitFeedback(icebreaker, feedback)
+    }
+}
+```
+
+**Feedback Types:**
+
+```kotlin
+enum class IcebreakerFeedback {
+    GOOD,     // User liked it
+    BAD,      // User didn't like it
+    USED,     // User used it successfully
+    IGNORED   // User didn't use it
+}
+```
+
+**Implementation Example:**
+
+```kotlin
+// From HomeViewModel.kt:144-163
+fun onSubmitFeedback(feedback: IcebreakerFeedback) {
+    _uiState.update { it.copy(showFeedbackDialog = false) }
+    viewModelScope.launch {
+        submitFeedbackUseCase(uiState.value.currentIcebreaker, feedback)
+        
+        // Record as success if feedback is positive
+        val wasSuccessful = feedback == IcebreakerFeedback.GOOD || 
+                           feedback == IcebreakerFeedback.USED
+        addSuccessUseCase(
+            SuccessRecord(
+                id = Clock.System.now().toEpochMilliseconds().toString(),
+                date = Clock.System.now(),
+                environment = currentEnvironment,
+                intensity = currentIntensity,
+                icebreaker = uiState.value.currentIcebreaker,
+                wasSuccessful = wasSuccessful
+            )
+        )
+        resetDialogs()
+    }
+}
+```
+
+## UI State Management
+
+The `HomeUiState` tracks the entire generation flow:
+
+```kotlin
+data class HomeUiState(
+    val isLoading: Boolean = false,
+    val showIcebreaker: Boolean = false,
+    val showActionChoices: Boolean = false,
+    val showFeedbackDialog: Boolean = false,
+    val showPaywallNavigation: Boolean = false,
+    val isPremium: Boolean = false,
+    val currentIcebreaker: String = "",
+    val error: String? = null,
+    val showOnboarding: Boolean = false,
+    val showAuth: Boolean = false
+)
+```
+
+## Complete Implementation Example
+
+Here's a full implementation from the source code:
+
+<CodeGroup>
+
+```kotlin HomeScreen.kt
+@Composable
+fun HomeScreen(
+    onNavigateToPaywall: () -> Unit = {}
+) {
+    var selectedEnvironment by remember { mutableStateOf("env_party") }
+    var selectedIntensity by remember { mutableStateOf("int_funny") }
+    var rolling by remember { mutableStateOf(false) }
+    
+    val viewModel: HomeViewModel = koinViewModel()
+    val uiState by viewModel.uiState.collectAsState()
+    
+    Box(modifier = Modifier.fillMaxSize().background(DeepDarkBlue)) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Rizz Dice Animation
+            RizzDice(
+                rolling = rolling,
+                onRollComplete = { result ->
+                    rolling = false
+                    val currentLanguage = Locale.current.language
+                    viewModel.onRollComplete(
+                        selectedEnvironment, 
+                        selectedIntensity, 
+                        currentLanguage
+                    )
+                },
+                modifier = Modifier.size(180.dp)
+            )
+            
+            // Environment Selector
+            SelectorGroup(
+                title = "Environment",
+                options = AppConstants.ENVIRONMENTS,
+                selectedOption = selectedEnvironment,
+                onOptionSelected = { selectedEnvironment = it }
+            )
+            
+            // Intensity Selector
+            SelectorGroup(
+                title = "Intensity",
+                options = AppConstants.INTENSITIES,
+                selectedOption = selectedIntensity,
+                onOptionSelected = { selectedIntensity = it },
+                isRestricted = { option -> 
+                    option == "int_spicy" && !uiState.isPremium 
+                }
+            )
+            
+            // Launch Button
+            LaunchButton(
+                onClick = {
+                    rolling = true
+                    viewModel.dismissIcebreaker()
+                },
+                environmentColor = AppConstants.getEnvironmentColor(selectedEnvironment),
+                intensityColor = AppConstants.getIntensityColor(selectedIntensity)
+            )
+        }
+        
+        // Icebreaker Dialog
+        if (uiState.showIcebreaker) {
+            IcebreakerDialog(
+                text = uiState.currentIcebreaker,
+                onDismiss = { viewModel.onIcebreakerDismissed() }
+            )
+        }
+        
+        // Action Choice Dialog
+        if (uiState.showActionChoices) {
+            ActionChoiceDialog(
+                onChoice = { used -> viewModel.onActionChoice(used) }
+            )
+        }
+        
+        // Feedback Dialog
+        if (uiState.showFeedbackDialog) {
+            FeedbackDialog(
+                onSubmit = { feedback -> viewModel.onSubmitFeedback(feedback) }
+            )
+        }
+        
+        // Loading State
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = NeonCyan)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Rolling Rizz...", color = TextWhite)
+                }
+            }
+        }
+        
+        // Error State
+        if (uiState.error != null) {
+            EmptyState(
+                title = "Error",
+                description = uiState.error ?: "",
+                icon = "😵‍💫",
+                buttonText = "Retry",
+                onButtonClick = { viewModel.onRetryRoll() }
+            )
+        }
+        
+        // Navigate to Paywall
+        if (uiState.showPaywallNavigation) {
+            LaunchedEffect(uiState.showPaywallNavigation) {
+                onNavigateToPaywall()
+                viewModel.onPaywallNavigated()
+            }
+        }
+    }
+}
+```
+
+```kotlin ViewModel.kt
+class HomeViewModel(
+    private val generateIcebreakerUseCase: GenerateIcebreakerUseCase,
+    private val submitFeedbackUseCase: SubmitFeedbackUseCase,
+    private val rollDiceUseCase: RollDiceUseCase,
+    private val checkEntitlementUseCase: CheckEntitlementUseCase
+) : ViewModel() {
+    
+    private val _uiState = MutableStateFlow(HomeUiState())
+    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    
+    fun onRollComplete(environment: String, intensity: String, language: String) {
+        _uiState.update { it.copy(isLoading = true, error = null) }
+        viewModelScope.launch {
+            // Check rolls remaining
+            val rollResult = rollDiceUseCase()
+            if (rollResult.isFailure) {
+                handleRollFailure(rollResult.exceptionOrNull())
+                return@launch
+            }
+            
+            // Check entitlements
+            if (!checkEntitlementUseCase.canAccessCategory(intensity)) {
+                showPaywall()
+                return@launch
+            }
+            
+            // Generate icebreaker
+            when (val result = generateIcebreakerUseCase(environment, intensity, language)) {
+                is Resource.Success -> {
+                    _uiState.update { 
+                        it.copy(
+                            isLoading = false,
+                            currentIcebreaker = result.data,
+                            showIcebreaker = true
+                        )
+                    }
+                }
+                is Resource.Error -> {
+                    _uiState.update { 
+                        it.copy(isLoading = false, error = result.message)
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+</CodeGroup>
+
+## Environment and Intensity Options
+
+The SDK provides predefined environment and intensity options:
+
+<Tabs>
+  <Tab title="Environments">
+    ```kotlin
+    object AppConstants {
+        val ENVIRONMENTS = listOf(
+            "env_coffee_shop",
+            "env_party",
+            "env_gym",
+            "env_beach",
+            "env_library"
+        )
+        
+        fun getEnvironmentColor(env: String): Color {
+            return when (env) {
+                "env_coffee_shop" -> Color(0xFF8B4513)
+                "env_party" -> Color(0xFFFF1493)
+                "env_gym" -> Color(0xFF32CD32)
+                "env_beach" -> Color(0xFF00CED1)
+                "env_library" -> Color(0xFF9370DB)
+                else -> NeonCyan
+            }
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Intensities">
+    ```kotlin
+    val INTENSITIES = listOf(
+        "int_casual",
+        "int_funny",
+        "int_flirty",
+        "int_spicy"  // Premium only
+    )
+    
+    fun getIntensityColor(intensity: String): Color {
+        return when (intensity) {
+            "int_casual" -> Color(0xFF87CEEB)
+            "int_funny" -> Color(0xFFFFD700)
+            "int_flirty" -> Color(0xFFFF69B4)
+            "int_spicy" -> Color(0xFFFF4500)
+            else -> NeonPink
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Handling Premium Content
+
+Restrict premium intensity options for free users:
+
+```kotlin
+SelectorGroup(
+    title = "Intensity",
+    options = intensities,
+    selectedOption = selectedIntensity,
+    onOptionSelected = { selectedIntensity = it },
+    // Mark spicy as restricted for non-premium users
+    isRestricted = { option -> 
+        option == "int_spicy" && !uiState.isPremium 
+    }
+)
+```
+
+<Warning>
+  Always check entitlements before generating with premium intensity levels. The `CheckEntitlementUseCase` will return false for restricted content.
+</Warning>
+
+## Error Handling
+
+Handle various error scenarios:
+
+```kotlin
+when {
+    uiState.error != null -> {
+        // Network or generation error
+        ErrorDialog(
+            message = uiState.error ?: "Unknown error",
+            onRetry = { viewModel.onRetryRoll() },
+            onDismiss = { viewModel.dismissError() }
+        )
+    }
+    uiState.showPaywallNavigation -> {
+        // User needs to upgrade
+        LaunchedEffect(Unit) {
+            navigateToPaywall()
+        }
+    }
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Cache Current Selections">
+    Store environment, intensity, and language for retry attempts:
+
+    ```kotlin
+    private var currentEnvironment: String = ""
+    private var currentIntensity: String = ""
+    private var currentLanguage: String = "en"
+    
+    fun onRetryRoll() {
+        onRollComplete(currentEnvironment, currentIntensity, currentLanguage)
+    }
+    ```
+  </Step>
+
+  <Step title="Observe Premium Status">
+    React to subscription changes:
+
+    ```kotlin
+    init {
+        viewModelScope.launch {
+            checkEntitlementUseCase.subscriptionRepository
+                .getSubscriptionStatus()
+                .collect { status ->
+                    _uiState.update { 
+                        it.copy(isPremium = status.tier == SubscriptionTier.PREMIUM) 
+                    }
+                }
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Track Success Metrics">
+    Record successful icebreaker usage:
+
+    ```kotlin
+    fun onSubmitFeedback(feedback: IcebreakerFeedback) {
+        viewModelScope.launch {
+            val wasSuccessful = feedback in listOf(
+                IcebreakerFeedback.GOOD, 
+                IcebreakerFeedback.USED
+            )
+            
+            addSuccessUseCase(
+                SuccessRecord(
+                    icebreaker = uiState.value.currentIcebreaker,
+                    wasSuccessful = wasSuccessful
+                )
+            )
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+- Learn about [Subscription Management](/guides/subscription-management) to implement premium features
+- Explore [UI Components](/guides/ui-components) for dialog and button components
+- Check out [Authentication](/guides/authentication) for user management

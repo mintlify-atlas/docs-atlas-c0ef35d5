@@ -1,0 +1,208 @@
+---
+title: 'SubscriptionRepository'
+description: 'Repository interface for managing subscription and purchase operations'
+---
+
+## Overview
+
+The `SubscriptionRepository` interface provides a comprehensive API for managing subscription operations, including purchasing, restoring purchases, checking entitlements, and managing daily rolls for free users.
+
+**Package:** `com.dadomatch.shared.feature.subscription.domain.repository`
+
+## Methods
+
+### getSubscriptionStatus
+
+<ParamField path="getSubscriptionStatus" type="() -> Flow<SubscriptionStatus>">
+  Get current subscription status as a Flow for reactive updates. This allows observers to receive real-time updates when the subscription status changes.
+</ParamField>
+
+**Returns:** `Flow<SubscriptionStatus>` - A Flow that emits subscription status updates
+
+**Example:**
+```kotlin
+subscriptionRepository.getSubscriptionStatus()
+    .collect { status ->
+        // Handle subscription status updates
+    }
+```
+
+---
+
+### getCurrentSubscriptionStatus
+
+<ParamField path="getCurrentSubscriptionStatus" type="suspend () -> Result<SubscriptionStatus>">
+  Get current subscription status as a one-time fetch.
+</ParamField>
+
+**Returns:** `Result<SubscriptionStatus>` - Result containing the current subscription status
+
+**Example:**
+```kotlin
+val result = subscriptionRepository.getCurrentSubscriptionStatus()
+result.onSuccess { status ->
+    // Handle subscription status
+}
+```
+
+---
+
+### purchaseSubscription
+
+<ParamField path="purchaseSubscription" type="suspend (productId: String) -> Result<SubscriptionStatus>">
+  Purchase a subscription product.
+</ParamField>
+
+**Parameters:**
+- `productId` (String) - The product identifier to purchase
+
+**Returns:** `Result<SubscriptionStatus>` - Result with updated subscription status after purchase
+
+**Example:**
+```kotlin
+val result = subscriptionRepository.purchaseSubscription("premium_monthly")
+result.onSuccess { status ->
+    // Purchase successful
+}.onFailure { error ->
+    // Handle purchase error
+}
+```
+
+---
+
+### restorePurchases
+
+<ParamField path="restorePurchases" type="suspend () -> Result<SubscriptionStatus>">
+  Restore previous purchases from the app store.
+</ParamField>
+
+**Returns:** `Result<SubscriptionStatus>` - Result with updated subscription status after restoration
+
+**Example:**
+```kotlin
+val result = subscriptionRepository.restorePurchases()
+result.onSuccess { status ->
+    // Purchases restored
+}
+```
+
+---
+
+### hasEntitlement
+
+<ParamField path="hasEntitlement" type="suspend (entitlement: Entitlement) -> Boolean">
+  Check if user has a specific entitlement.
+</ParamField>
+
+**Parameters:**
+- `entitlement` (Entitlement) - The entitlement to check
+
+**Returns:** `Boolean` - `true` if user has the entitlement, `false` otherwise
+
+**Example:**
+```kotlin
+val hasPro = subscriptionRepository.hasEntitlement(Entitlement.PRO)
+if (hasPro) {
+    // User has premium access
+}
+```
+
+---
+
+### getAvailableProducts
+
+<ParamField path="getAvailableProducts" type="suspend () -> Result<List<Product>>">
+  Get available subscription products for purchase.
+</ParamField>
+
+**Returns:** `Result<List<Product>>` - Result with list of available products
+
+**Example:**
+```kotlin
+val result = subscriptionRepository.getAvailableProducts()
+result.onSuccess { products ->
+    products.forEach { product ->
+        // Display product information
+    }
+}
+```
+
+---
+
+### decrementDailyRolls
+
+<ParamField path="decrementDailyRolls" type="suspend () -> Result<SubscriptionStatus>">
+  Decrement daily roll count for free users. This is typically called when a free user performs a roll action.
+</ParamField>
+
+**Returns:** `Result<SubscriptionStatus>` - Updated subscription status with decremented roll count
+
+**Example:**
+```kotlin
+val result = subscriptionRepository.decrementDailyRolls()
+result.onSuccess { status ->
+    // Roll count decremented
+}
+```
+
+---
+
+### resetDailyRolls
+
+<ParamField path="resetDailyRolls" type="suspend () -> Unit">
+  Reset daily roll count. This should be called at midnight to refresh the daily roll allowance for free users.
+</ParamField>
+
+**Example:**
+```kotlin
+subscriptionRepository.resetDailyRolls()
+```
+
+---
+
+### logIn
+
+<ParamField path="logIn" type="suspend (userId: String) -> Result<SubscriptionStatus>">
+  Link current user with RevenueCat ID. This associates the user's subscription data with their user account.
+</ParamField>
+
+**Parameters:**
+- `userId` (String) - The user identifier to link with RevenueCat
+
+**Returns:** `Result<SubscriptionStatus>` - Result with subscription status after login
+
+**Example:**
+```kotlin
+val result = subscriptionRepository.logIn(firebaseUserId)
+result.onSuccess { status ->
+    // User logged in and linked with RevenueCat
+}
+```
+
+---
+
+### logOut
+
+<ParamField path="logOut" type="suspend () -> Result<SubscriptionStatus>">
+  Unlink user from RevenueCat ID. This disassociates the user's subscription data from their account.
+</ParamField>
+
+**Returns:** `Result<SubscriptionStatus>` - Result with subscription status after logout
+
+**Example:**
+```kotlin
+val result = subscriptionRepository.logOut()
+result.onSuccess { status ->
+    // User logged out
+}
+```
+
+## Related Types
+
+- `SubscriptionStatus` - Represents the current subscription state
+- `Entitlement` - Enum representing different entitlement types
+- `Product` - Represents a purchasable subscription product
+
+## See Also
+
+- [RevenueCatService](/api/subscription/revenuecat-service) - Low-level RevenueCat SDK wrapper

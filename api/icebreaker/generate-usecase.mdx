@@ -1,0 +1,199 @@
+---
+title: GenerateIcebreakerUseCase
+description: Use case for generating AI-powered icebreakers
+---
+
+## Overview
+
+The `GenerateIcebreakerUseCase` is a use case class that provides a clean interface for generating icebreakers. It follows the use case pattern to encapsulate business logic and delegates to the `IcebreakerRepository`.
+
+**Package:** `com.dadomatch.shared.feature.icebreaker.domain.usecase`
+
+## Class Definition
+
+```kotlin
+class GenerateIcebreakerUseCase(
+    private val repository: IcebreakerRepository
+) {
+    suspend operator fun invoke(
+        environment: String,
+        intensity: String,
+        language: String
+    ): Resource<String>
+}
+```
+
+## Constructor
+
+<ParamField path="repository" type="IcebreakerRepository" required>
+  The repository instance used to generate icebreakers
+</ParamField>
+
+Creates a new instance of `GenerateIcebreakerUseCase`.
+
+**Example:**
+```kotlin
+val repository = IcebreakerRepositoryImpl(geminiService)
+val generateUseCase = GenerateIcebreakerUseCase(repository)
+```
+
+## Methods
+
+### invoke (operator)
+
+<ParamField path="environment" type="String" required>
+  The social environment context for the icebreaker
+  
+  Common values:
+  - `"party"` - Social party or gathering
+  - `"coffee shop"` - Casual coffee shop setting
+  - `"gym"` - Fitness or gym environment
+  - `"bar"` - Bar or nightlife setting
+  - `"work"` - Professional workplace setting
+</ParamField>
+
+<ParamField path="intensity" type="String" required>
+  The intensity or boldness level of the icebreaker
+  
+  Common values:
+  - `"low"` - Safe, casual conversation starters
+  - `"medium"` - Moderately engaging topics
+  - `"high"` - Bold, direct, or flirty approaches
+</ParamField>
+
+<ParamField path="language" type="String" required>
+  The ISO language code for the generated icebreaker
+  
+  Examples:
+  - `"en"` - English
+  - `"es"` - Spanish
+  - `"fr"` - French
+  - `"de"` - German
+</ParamField>
+
+<ResponseField name="return" type="Resource<String>">
+  A `Resource` wrapper containing:
+  - `Success<String>`: The generated icebreaker text
+  - `Error`: An error message and optional throwable if generation failed
+  - `Loading`: Indicates the operation is in progress
+</ResponseField>
+
+Generates an AI-powered icebreaker based on the specified parameters. This method uses the `operator` modifier, allowing the use case to be invoked like a function.
+
+**Signature:**
+```kotlin
+suspend operator fun invoke(
+    environment: String,
+    intensity: String,
+    language: String
+): Resource<String>
+```
+
+## Usage
+
+### Basic Usage
+
+```kotlin
+val generateUseCase = GenerateIcebreakerUseCase(repository)
+
+// Invoke the use case
+val result = generateUseCase(
+    environment = "coffee shop",
+    intensity = "medium",
+    language = "en"
+)
+
+when (result) {
+    is Resource.Success -> {
+        println("Generated icebreaker: ${result.data}")
+    }
+    is Resource.Error -> {
+        println("Failed to generate: ${result.message}")
+        result.throwable?.printStackTrace()
+    }
+    is Resource.Loading -> {
+        println("Generating icebreaker...")
+    }
+}
+```
+
+### In a ViewModel (Android/KMP)
+
+```kotlin
+class IcebreakerViewModel(
+    private val generateUseCase: GenerateIcebreakerUseCase
+) : ViewModel() {
+    
+    private val _icebreaker = MutableStateFlow<Resource<String>>(Resource.Loading)
+    val icebreaker: StateFlow<Resource<String>> = _icebreaker.asStateFlow()
+    
+    fun generateIcebreaker(
+        environment: String,
+        intensity: String,
+        language: String
+    ) {
+        viewModelScope.launch {
+            _icebreaker.value = Resource.Loading
+            _icebreaker.value = generateUseCase(
+                environment = environment,
+                intensity = intensity,
+                language = language
+            )
+        }
+    }
+}
+```
+
+### Error Handling
+
+```kotlin
+val result = generateUseCase(
+    environment = "gym",
+    intensity = "high",
+    language = "en"
+)
+
+if (result is Resource.Error) {
+    // Handle specific error cases
+    when {
+        result.message.contains("network") -> {
+            showNetworkError()
+        }
+        result.message.contains("timeout") -> {
+            showTimeoutError()
+        }
+        else -> {
+            showGenericError(result.message)
+        }
+    }
+}
+```
+
+## Dependency Injection
+
+### Koin Example
+
+```kotlin
+val icebreakerModule = module {
+    single { GeminiService(get()) }
+    single<IcebreakerRepository> { IcebreakerRepositoryImpl(get()) }
+    factory { GenerateIcebreakerUseCase(get()) }
+}
+```
+
+### Manual Injection
+
+```kotlin
+val geminiService = GeminiService(apiKey = "your-api-key")
+val repository = IcebreakerRepositoryImpl(geminiService)
+val generateUseCase = GenerateIcebreakerUseCase(repository)
+```
+
+## Source Location
+
+**File:** `shared/src/commonMain/kotlin/com/dadomatch/shared/feature/icebreaker/domain/usecase/GenerateIcebreakerUseCase.kt`
+
+## See Also
+
+- [IcebreakerRepository](/api/icebreaker/icebreaker-repository) - The repository interface used by this use case
+- [RollDiceUseCase](/api/icebreaker/roll-dice-usecase) - Use case for handling dice roll attempts with subscription checks

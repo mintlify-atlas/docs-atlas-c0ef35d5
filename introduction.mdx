@@ -1,0 +1,89 @@
+---
+title: Introduction
+description: Kotlin Multiplatform shared library for DadoMatch iOS and Android applications
+---
+
+<img
+  className="block rounded-lg"
+  src="https://media.brand.dev/9fc0bbc3-5176-4a42-84c6-e2aef5e52791.jpg"
+  alt="DadoMatch Shared"
+  style={{ maxWidth: '200px', margin: '0 auto' }}
+/>
+
+# Welcome to DadoMatch Shared
+
+DadoMatch Shared is a Kotlin Multiplatform library providing shared business logic, UI components, and utilities for DadoMatch iOS and Android applications.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Cross-Platform" icon="mobile">
+    Write code once, run on iOS (16.0+) and Android (API 24+)
+  </Card>
+  <Card title="Compose Multiplatform" icon="paintbrush">
+    Shared UI components built with Compose Multiplatform
+  </Card>
+  <Card title="Firebase Auth" icon="lock">
+    Google and Apple Sign-In with Firebase authentication
+  </Card>
+  <Card title="AI-Powered" icon="sparkles">
+    Gemini API integration for intelligent icebreaker generation
+  </Card>
+  <Card title="Subscription Management" icon="credit-card">
+    RevenueCat integration for in-app purchases and subscriptions
+  </Card>
+  <Card title="Dependency Injection" icon="plug">
+    Koin-based DI system for clean architecture
+  </Card>
+  <Card title="Local Persistence" icon="database">
+    Room database for offline-first data storage
+  </Card>
+  <Card title="Networking" icon="globe">
+    Ktor client for cross-platform HTTP requests
+  </Card>
+</CardGroup>
+
+## Platform Support
+
+- **Android**: API 24+ (Android 7.0 Nougat and above)
+- **iOS**: iOS 16.0+ with XCFramework distribution
+
+## Architecture
+
+DadoMatch Shared follows clean architecture principles with feature-based organization:
+
+- **Core Module**: Shared utilities, configuration, and base classes
+- **Feature Modules**: Authentication, Icebreaker, Subscription, Onboarding, Success
+- **Platform-Specific Code**: Android and iOS implementations via `expect`/`actual`
+
+## Quick Links
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Add DadoMatch Shared to your project
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running in 5 minutes
+  </Card>
+  <Card title="Android Integration" icon="android" href="/integration/android">
+    Integrate with Android apps
+  </Card>
+  <Card title="iOS Integration" icon="apple" href="/integration/ios">
+    Integrate with iOS apps
+  </Card>
+</CardGroup>
+
+## What's Inside
+
+The library provides:
+
+- **Authentication**: Firebase auth with Google, Apple, and anonymous sign-in
+- **Icebreaker Generation**: AI-powered conversation starters using Gemini
+- **Subscription Management**: RevenueCat SDK integration for Pro features
+- **UI Components**: Reusable Compose Multiplatform screens and components
+- **Data Layer**: Repository pattern with Room database persistence
+- **Environment Configuration**: BuildKonfig for environment-specific settings
+
+## Open Source
+
+DadoMatch Shared is proprietary software by ChauxDevApps. For questions or support, visit the [GitHub repository](https://github.com/felipechaux/dado-match-shared).

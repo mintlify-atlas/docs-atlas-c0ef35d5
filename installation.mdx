@@ -1,0 +1,220 @@
+---
+title: Installation
+description: Add DadoMatch Shared to your Android and iOS projects
+icon: download
+---
+
+# Installation
+
+DadoMatch Shared is distributed as a Kotlin Multiplatform library with platform-specific integration methods for Android and iOS.
+
+## Requirements
+
+<CardGroup cols={2}>
+  <Card title="Android" icon="android">
+    - API 24+ (Android 7.0+)
+    - JDK 17+
+    - Kotlin 1.9+
+  </Card>
+  <Card title="iOS" icon="apple">
+    - iOS 16.0+
+    - Xcode 15+
+    - Swift 5.9+
+  </Card>
+</CardGroup>
+
+## Choose Your Platform
+
+<Tabs>
+  <Tab title="Android">
+    
+## Android Installation
+
+DadoMatch Shared integrates with Android projects using Gradle. Choose the method that fits your workflow.
+
+### Local Development (Recommended for Development)
+
+Use `includeBuild` to link the shared module directly for active development:
+
+<Steps>
+  <Step title="Add includeBuild to settings.gradle.kts">
+    Add the shared module as an included build in your app's `settings.gradle.kts`:
+
+    ```kotlin settings.gradle.kts
+    includeBuild("../dado-match-shared")
+    ```
+
+    This assumes the `dado-match-shared` repository is in a sibling directory to your app project.
+  </Step>
+
+  <Step title="Add dependency to build.gradle.kts">
+    In your app module's `build.gradle.kts`, add the dependency:
+
+    ```kotlin build.gradle.kts
+    dependencies {
+        implementation("com.dadomatch.shared:shared")
+    }
+    ```
+  </Step>
+
+  <Step title="Sync project">
+    Sync your Gradle project. The shared module will be compiled and linked automatically.
+  </Step>
+</Steps>
+
+<Note>
+  Local `includeBuild` is the current recommended configuration for development. It allows you to make changes to the shared module and see them immediately in your app without publishing.
+</Note>
+
+### Maven Repository (Future)
+
+<Info>
+  Maven repository publishing is planned for future releases. Check the [changelog](/resources/changelog) for updates.
+</Info>
+
+  </Tab>
+  <Tab title="iOS">
+
+## iOS Installation
+
+DadoMatch Shared is distributed as an XCFramework via Swift Package Manager.
+
+### Option 1: Local Development
+
+Build and link the XCFramework locally for active development:
+
+<Steps>
+  <Step title="Build the XCFramework">
+    From the `dado-match-shared` repository root, build the debug XCFramework:
+
+    ```bash
+    ./gradlew shared:assembleDadoMatchSharedDebugXCFramework
+    ```
+
+    The framework will be output to:
+    ```
+    shared/build/XCFrameworks/debug/DadoMatchShared.xcframework
+    ```
+  </Step>
+
+  <Step title="Add local package in Xcode">
+    1. In Xcode, go to **File → Add Package Dependencies**
+    2. Click **Add Local...**
+    3. Navigate to and select the `dado-match-shared` repository folder
+    4. Click **Add Package**
+    5. Select target **DadoMatchShared**
+    6. Click **Add Package**
+  </Step>
+
+  <Step title="Build your app">
+    Build the project: **Product → Build** (⌘+B)
+  </Step>
+</Steps>
+
+### Option 2: Remote Package (Recommended for Production)
+
+Add the package from GitHub for production builds:
+
+<Steps>
+  <Step title="Configure GitHub authentication">
+    Create or update your `~/.netrc` file with GitHub credentials:
+
+    ```bash ~/.netrc
+    machine api.github.com
+      login your-github-username
+      password your-github-token
+
+    machine github.com
+      login your-github-username
+      password your-github-token
+    ```
+
+    <Warning>
+      Replace `your-github-username` and `your-github-token` with your actual GitHub credentials. The token needs read access to the repository.
+    </Warning>
+  </Step>
+
+  <Step title="Add package in Xcode">
+    1. In Xcode, go to **File → Add Package Dependencies**
+    2. Enter the package URL: `https://github.com/felipechaux/dado-match-shared`
+    3. Select **Branch** and choose **main**
+    4. Click **Add Package**
+    5. Select target **DadoMatchShared**
+    6. Click **Add Package**
+  </Step>
+
+  <Step title="Build your app">
+    Build the project: **Product → Build** (⌘+B)
+  </Step>
+</Steps>
+
+### Option 3: Programmatic Integration
+
+Add to your `Package.swift` for SPM-based projects:
+
+```swift Package.swift
+dependencies: [
+    .package(url: "https://github.com/felipechaux/dado-match-shared", from: "1.0.0")
+]
+```
+
+<Note>
+  The package includes a binary target for the XCFramework and a wrapper target for Swift interoperability. Always use the **DadoMatchShared** target in your app.
+</Note>
+
+  </Tab>
+</Tabs>
+
+## Verify Installation
+
+After installation, verify the SDK is accessible:
+
+<Tabs>
+  <Tab title="Android (Kotlin)">
+    ```kotlin MainActivity.kt
+    import com.dadomatch.shared.initKoin
+
+    class MainActivity : ComponentActivity() {
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            // Koin should be initialized in your Application class
+            println("DadoMatch Shared is installed!")
+        }
+    }
+    ```
+  </Tab>
+
+  <Tab title="iOS (Swift)">
+    ```swift ContentView.swift
+    import DadoMatchShared
+
+    struct ContentView: View {
+        init() {
+            KoinInitializerKt.initKoin()
+            print("DadoMatch Shared is installed!")
+        }
+        
+        var body: some View {
+            Text("Hello, DadoMatch!")
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Initialize Koin and start using the SDK
+  </Card>
+  <Card title="Android Integration" icon="android" href="/integration/android">
+    Complete Android integration guide
+  </Card>
+  <Card title="iOS Integration" icon="apple" href="/integration/ios">
+    Complete iOS integration guide
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Learn about the SDK architecture
+  </Card>
+</CardGroup>

@@ -1,0 +1,258 @@
+---
+title: 'EnvironmentConfig'
+description: 'Environment configuration and build settings for DadoMatch Shared SDK'
+---
+
+## Overview
+
+The `EnvironmentConfig` object provides centralized access to environment-specific configuration settings. It reads values from `BuildKonfig` and exposes them through a clean API with additional helper methods for environment detection.
+
+## Properties
+
+### environment
+
+The current environment name.
+
+```kotlin
+val environment: String
+```
+
+<ResponseField name="environment" type="String">
+  Returns either `"stage"` or `"production"` based on the build configuration.
+</ResponseField>
+
+### isDebug
+
+Indicates whether this is a debug/development build.
+
+```kotlin
+val isDebug: Boolean
+```
+
+<ResponseField name="isDebug" type="Boolean">
+  Returns `true` for debug builds, `false` for release builds.
+</ResponseField>
+
+### isProduction
+
+Indicates whether the current environment is production.
+
+```kotlin
+val isProduction: Boolean
+```
+
+<ResponseField name="isProduction" type="Boolean">
+  Returns `true` when `environment == "production"`, `false` otherwise.
+</ResponseField>
+
+### isStage
+
+Indicates whether the current environment is stage.
+
+```kotlin
+val isStage: Boolean
+```
+
+<ResponseField name="isStage" type="Boolean">
+  Returns `true` when `environment == "stage"`, `false` otherwise.
+</ResponseField>
+
+### geminiApiKey
+
+Gemini API key for the current environment.
+
+```kotlin
+val geminiApiKey: String
+```
+
+<ResponseField name="geminiApiKey" type="String">
+  Returns the environment-specific Gemini API key from build configuration.
+</ResponseField>
+
+### geminiModelName
+
+Gemini model name for the current environment.
+
+```kotlin
+val geminiModelName: String
+```
+
+<ResponseField name="geminiModelName" type="String">
+  Returns the configured Gemini model name (e.g., "gemini-pro").
+</ResponseField>
+
+### revenueCatApiKey
+
+RevenueCat API key for the current environment.
+
+```kotlin
+val revenueCatApiKey: String
+```
+
+<ResponseField name="revenueCatApiKey" type="String">
+  Returns the environment-specific RevenueCat API key from build configuration.
+</ResponseField>
+
+### apiBaseUrl
+
+API base URL for the current environment.
+
+```kotlin
+val apiBaseUrl: String
+```
+
+<ResponseField name="apiBaseUrl" type="String">
+  Returns the base URL for API requests (e.g., "https://api.dadomatch.com" or "https://stage-api.dadomatch.com").
+</ResponseField>
+
+## Methods
+
+### getEnvironmentDisplay
+
+Returns a user-friendly environment display name with emoji indicator.
+
+```kotlin
+fun getEnvironmentDisplay(): String
+```
+
+<ResponseField name="return" type="String">
+  Returns a formatted string with emoji:
+  - `"🟢 Production"` for production environment
+  - `"🟡 Stage"` for stage environment
+  - `"⚪ Unknown"` for unrecognized environments
+</ResponseField>
+
+#### Usage
+
+```kotlin
+import com.dadomatch.shared.core.config.EnvironmentConfig
+
+val displayName = EnvironmentConfig.getEnvironmentDisplay()
+println(displayName) // Output: "🟢 Production" or "🟡 Stage"
+```
+
+### logConfig
+
+Logs the current environment configuration to console for debugging purposes.
+
+```kotlin
+fun logConfig()
+```
+
+This method prints all configuration values with sensitive data masked. It's useful for troubleshooting environment-specific issues.
+
+#### Output Format
+
+```
+=================================
+Environment: 🟢 Production
+Is Debug: false
+API Base URL: https://api.dadomatch.com
+Gemini Model: gemini-pro
+RevenueCat Key: ***configured***
+Gemini Key: ***configured***
+=================================
+```
+
+#### Usage
+
+```kotlin
+import com.dadomatch.shared.core.config.EnvironmentConfig
+
+fun debugConfiguration() {
+    EnvironmentConfig.logConfig()
+}
+```
+
+## Usage Examples
+
+<CodeGroup>
+
+```kotlin Environment Detection
+import com.dadomatch.shared.core.config.EnvironmentConfig
+
+fun configureAnalytics() {
+    if (EnvironmentConfig.isProduction) {
+        // Enable production analytics
+        Analytics.enable()
+    } else {
+        // Disable analytics in stage
+        Analytics.disable()
+    }
+}
+```
+
+```kotlin API Configuration
+import com.dadomatch.shared.core.config.EnvironmentConfig
+
+fun createApiClient(): ApiClient {
+    return ApiClient(
+        baseUrl = EnvironmentConfig.apiBaseUrl,
+        debugMode = EnvironmentConfig.isDebug
+    )
+}
+```
+
+```kotlin Debug Logging
+import com.dadomatch.shared.core.config.EnvironmentConfig
+
+fun initializeApp() {
+    if (EnvironmentConfig.isDebug) {
+        EnvironmentConfig.logConfig()
+    }
+}
+```
+
+```kotlin Feature Flags
+import com.dadomatch.shared.core.config.EnvironmentConfig
+
+fun isFeatureEnabled(feature: String): Boolean {
+    return when (feature) {
+        "beta_feature" -> EnvironmentConfig.isStage || EnvironmentConfig.isDebug
+        "premium_feature" -> true
+        else -> false
+    }
+}
+```
+
+</CodeGroup>
+
+## Configuration Source
+
+<Info>
+  All configuration values are sourced from `BuildKonfig`, which is generated at build time based on the selected build variant (stage or production).
+</Info>
+
+<Expandable title="BuildKonfig Properties">
+
+The following properties are read from `BuildKonfig`:
+
+- `ENVIRONMENT` - Environment name ("stage" or "production")
+- `IS_DEBUG` - Debug build flag
+- `GEMINI_API_KEY` - Gemini API key
+- `GEMINI_MODEL_NAME` - Gemini model identifier
+- `REVENUECAT_API_KEY` - RevenueCat API key
+- `API_BASE_URL` - Backend API base URL
+
+</Expandable>
+
+## Security Considerations
+
+<Warning>
+  API keys and sensitive configuration values should never be logged or exposed in production builds. The `logConfig()` method masks sensitive values with `***configured***`.
+</Warning>
+
+## Related APIs
+
+- [KoinInitializer](/api/core/koin-initializer) - Initialize dependency injection
+- [Resource](/api/core/resource) - Handle asynchronous operation results
+
+## Package
+
+```kotlin
+package com.dadomatch.shared.core.config
+```
+
+## Source Location
+
+`shared/src/commonMain/kotlin/com/dadomatch/shared/core/config/EnvironmentConfig.kt`
