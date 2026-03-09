@@ -1,0 +1,138 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "DadoMatch Shared",
+  "projectDescription": "Kotlin Multiplatform shared library for DadoMatch iOS and Android applications with authentication, AI-powered features, and subscription management",
+  "theme": "palm",
+  "primaryColor": "#9ca4aa",
+  "lightColor": "#3e4554",
+  "darkColor": "#d7d8db",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Platform Integration",
+            "pages": [
+              "integration/android",
+              "integration/ios"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/dependency-injection",
+              "concepts/environment-config"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/authentication",
+              "guides/icebreaker-generation",
+              "guides/subscription-management",
+              "guides/ui-components"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core",
+            "pages": [
+              "api/core/koin-initializer",
+              "api/core/environment-config",
+              "api/core/resource"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/auth-repository",
+              "api/auth/auth-viewmodel",
+              "api/auth/native-auth-handler"
+            ]
+          },
+          {
+            "group": "Icebreaker",
+            "pages": [
+              "api/icebreaker/icebreaker-repository",
+              "api/icebreaker/generate-usecase",
+              "api/icebreaker/roll-dice-usecase"
+            ]
+          },
+          {
+            "group": "Subscription",
+            "pages": [
+              "api/subscription/subscription-repository",
+              "api/subscription/revenuecat-service"
+            ]
+          },
+          {
+            "group": "Onboarding",
+            "pages": [
+              "api/onboarding/onboarding-repository"
+            ]
+          },
+          {
+            "group": "Success",
+            "pages": [
+              "api/success/success-repository"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Resources",
+        "groups": [
+          {
+            "group": "Additional Resources",
+            "pages": [
+              "resources/examples",
+              "resources/troubleshooting",
+              "resources/changelog",
+              "resources/contributing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Kotlin Multiplatform architecture for iOS and Android",
+    "Compose Multiplatform for shared UI components",
+    "Firebase authentication with Google and Apple Sign-In",
+    "AI-powered icebreaker generation using Gemini API",
+    "RevenueCat subscription management",
+    "Koin dependency injection",
+    "Room database for local data persistence",
+    "Ktor networking client"
+  ],
+  "publicApiSurface": [
+    "initKoin() - Initialize dependency injection",
+    "AuthRepository - Authentication management",
+    "AuthViewModel - Authentication UI state",
+    "NativeAuthHandler - Platform-specific auth handling",
+    "IcebreakerRepository - Icebreaker generation",
+    "GenerateIcebreakerUseCase - Generate AI conversation starters",
+    "RollDiceUseCase - Random icebreaker selection",
+    "SubscriptionRepository - Subscription state management",
+    "RevenueCatService - In-app purchase integration",
+    "OnboardingRepository - User onboarding flow",
+    "SuccessRepository - User success tracking",
+    "AuthBottomSheet - Composable auth UI",
+    "HomeScreen - Main screen composable",
+    "BuildKonfig - Environment configuration"
+  ]
+}
