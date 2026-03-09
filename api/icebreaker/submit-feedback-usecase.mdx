@@ -1,0 +1,146 @@
+---
+title: 'SubmitFeedbackUseCase'
+description: 'Use case for submitting user feedback on generated icebreakers'
+---
+
+## Overview
+
+The `SubmitFeedbackUseCase` handles submission of user feedback for generated icebreakers. This feedback helps improve the quality of AI-generated content by tracking which icebreakers users find helpful.
+
+**Package:** `com.dadomatch.shared.feature.icebreaker.domain.usecase`
+
+## Constructor
+
+<ParamField path="repository" type="IcebreakerRepository" required>
+  The repository instance for submitting feedback
+</ParamField>
+
+## Method
+
+### invoke
+
+```kotlin
+suspend operator fun invoke(icebreaker: String, feedback: IcebreakerFeedback)
+```
+
+Submits user feedback for a specific icebreaker.
+
+<ParamField path="icebreaker" type="String" required>
+  The icebreaker text that was generated and shown to the user
+</ParamField>
+
+<ParamField path="feedback" type="IcebreakerFeedback" required>
+  The feedback type. Values:
+  - `IcebreakerFeedback.LIKE` - User liked the icebreaker
+  - `IcebreakerFeedback.DISLIKE` - User disliked the icebreaker
+  - `IcebreakerFeedback.REGENERATE` - User requested a new icebreaker
+</ParamField>
+
+## Usage Examples
+
+### Basic Usage
+
+```kotlin
+import com.dadomatch.shared.feature.icebreaker.domain.usecase.SubmitFeedbackUseCase
+import com.dadomatch.shared.feature.icebreaker.domain.model.IcebreakerFeedback
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+class IcebreakerExample : KoinComponent {
+    private val submitFeedback: SubmitFeedbackUseCase by inject()
+
+    suspend fun submitLikeFeedback(icebreaker: String) {
+        submitFeedback(icebreaker, IcebreakerFeedback.LIKE)
+    }
+
+    suspend fun submitDislikeFeedback(icebreaker: String) {
+        submitFeedback(icebreaker, IcebreakerFeedback.DISLIKE)
+    }
+}
+```
+
+### In ViewModel
+
+```kotlin
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.dadomatch.shared.feature.icebreaker.domain.usecase.SubmitFeedbackUseCase
+import com.dadomatch.shared.feature.icebreaker.domain.model.IcebreakerFeedback
+import kotlinx.coroutines.launch
+
+class IcebreakerViewModel(
+    private val submitFeedback: SubmitFeedbackUseCase
+) : ViewModel() {
+
+    fun onLikeClicked(icebreaker: String) {
+        viewModelScope.launch {
+            submitFeedback(icebreaker, IcebreakerFeedback.LIKE)
+        }
+    }
+
+    fun onDislikeClicked(icebreaker: String) {
+        viewModelScope.launch {
+            submitFeedback(icebreaker, IcebreakerFeedback.DISLIKE)
+        }
+    }
+
+    fun onRegenerateClicked(icebreaker: String) {
+        viewModelScope.launch {
+            submitFeedback(icebreaker, IcebreakerFeedback.REGENERATE)
+        }
+    }
+}
+```
+
+### With Error Handling
+
+```kotlin
+import kotlinx.coroutines.runCatching
+
+suspend fun submitFeedbackSafely(
+    submitFeedback: SubmitFeedbackUseCase,
+    icebreaker: String,
+    feedback: IcebreakerFeedback
+) {
+    runCatching {
+        submitFeedback(icebreaker, feedback)
+    }.onSuccess {
+        println("Feedback submitted successfully")
+    }.onFailure { error ->
+        println("Failed to submit feedback: ${error.message}")
+    }
+}
+```
+
+## Dependency Injection
+
+The use case is automatically registered in the Koin DI container:
+
+```kotlin
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+class MyClass : KoinComponent {
+    private val submitFeedback: SubmitFeedbackUseCase by inject()
+}
+```
+
+Or inject directly in ViewModel:
+
+```kotlin
+import org.koin.androidx.viewmodel.dsl.viewModel
+import org.koin.dsl.module
+
+val myModule = module {
+    viewModel { IcebreakerViewModel(get()) }
+}
+```
+
+## Related APIs
+
+- [IcebreakerRepository](/api/icebreaker/icebreaker-repository) - Repository that handles the feedback submission
+- [GenerateIcebreakerUseCase](/api/icebreaker/generate-usecase) - Generate icebreakers to get feedback on
+
+## Source Location
+
+`shared/src/commonMain/kotlin/com/dadomatch/shared/feature/icebreaker/domain/usecase/SubmitFeedbackUseCase.kt`

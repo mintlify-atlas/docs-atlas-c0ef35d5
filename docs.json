@@ -82,7 +82,8 @@
             "pages": [
               "api/icebreaker/icebreaker-repository",
               "api/icebreaker/generate-usecase",
-              "api/icebreaker/roll-dice-usecase"
+              "api/icebreaker/roll-dice-usecase",
+              "api/icebreaker/submit-feedback-usecase"
             ]
           },
           {
